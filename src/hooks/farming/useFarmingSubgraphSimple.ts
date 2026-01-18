@@ -6,6 +6,8 @@ import { DoubleSideStakingInfo, Token } from '@/types/farming'
 import { useWallet } from '@/hooks/useWallet'
 import liquidityPoolManagerV2ABI from '@/config/abis/dex/liqudityPoolManagerV2ABI.json'
 import { createMulticallService } from '@/utils/multicall'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 // Contract address for LiquidityPoolManagerV2
 const LIQUIDITY_POOL_MANAGER_V2_ADDRESS = '0xe83e7ede1358FA87e5039CF8B1cffF383Bc2896A'
@@ -25,7 +27,7 @@ class MockTokenAmount {
       const tokenAmount = this.raw.div(divisor)
       return tokenAmount.toString()
     } catch (error) {
-      console.error('Error in toSignificant:', error)
+      farmingLogger.error('Error in toSignificant:', error)
       return '0'
     }
   }
@@ -38,7 +40,7 @@ class MockTokenAmount {
       const num = parseFloat(tokenAmount.toString())
       return num.toFixed(digits)
     } catch (error) {
-      console.error('Error in toFixed:', error)
+      farmingLogger.error('Error in toFixed:', error)
       return '0'
     }
   }
@@ -90,11 +92,11 @@ export function useFarmingSubgraphSimple() {
       // Check if we have cached weights that are still valid
       const now = Date.now()
       if (weightsCacheTime > 0 && (now - weightsCacheTime) < CACHE_DURATION && Object.keys(weightsCache).length > 0) {
-        console.log('🚀 Using cached weights')
+        farmingLogger.debug('🚀 Using cached weights')
         return weightsCache
       }
 
-      console.log('🏋️ Fetching weights from contract in parallel...')
+      farmingLogger.debug('🏋️ Fetching weights from contract in parallel...')
       const provider = new ethers.providers.JsonRpcProvider('https://rpc.kalychain.io/rpc')
       const liquidityManagerContract = new ethers.Contract(
         LIQUIDITY_POOL_MANAGER_V2_ADDRESS,
@@ -108,7 +110,7 @@ export function useFarmingSubgraphSimple() {
           const weight = await liquidityManagerContract.weights(pairAddress)
           return { address: pairAddress.toLowerCase(), weight: weight.toString() }
         } catch (error) {
-          console.warn(`Failed to get weight for ${pairAddress}:`, error)
+          farmingLogger.warn(`Failed to get weight for ${pairAddress}:`, error)
           return { address: pairAddress.toLowerCase(), weight: '0' }
         }
       })
@@ -119,7 +121,7 @@ export function useFarmingSubgraphSimple() {
       const weights: { [key: string]: string } = {}
       weightResults.forEach(({ address, weight }) => {
         weights[address] = weight
-        console.log(`🏋️ Weight for ${address}: ${weight}`)
+        farmingLogger.debug(`🏋️ Weight for ${address}: ${weight}`)
       })
 
       // Cache the results
@@ -128,7 +130,7 @@ export function useFarmingSubgraphSimple() {
 
       return weights
     } catch (error) {
-      console.error('Error fetching pool weights from contract:', error)
+      farmingLogger.error('Error fetching pool weights from contract:', error)
       return weightsCache // Return cached weights if available
     }
   }, [weightsCache, weightsCacheTime])
@@ -138,7 +140,7 @@ export function useFarmingSubgraphSimple() {
       setIsLoading(true)
       setError(null)
 
-      console.log('🚀 Fetching farming data from backend...')
+      farmingLogger.debug('🚀 Fetching farming data from backend...')
 
       const response = await fetch('/api/graphql', {
         method: 'POST',
@@ -194,9 +196,9 @@ export function useFarmingSubgraphSimple() {
 
       const { farmingPools, whitelistedPools, userFarms } = result.data.farmingData
 
-      console.log(`✅ Fetched ${farmingPools.length} farming pools, ${userFarms?.length || 0} user farms for address: ${userAddress}`)
+      farmingLogger.debug(`✅ Fetched ${farmingPools.length} farming pools, ${userFarms?.length || 0} user farms for address: ${userAddress}`)
       if (userFarms && userFarms.length > 0) {
-        console.log('🎯 User farms data:', userFarms)
+        farmingLogger.debug('🎯 User farms data:', userFarms)
       }
 
       // Get actual weights from contract
@@ -245,7 +247,7 @@ export function useFarmingSubgraphSimple() {
           symbol: token0Symbol,
           name: token0Symbol,
           decimals: 18,
-          chainId: 3888
+          chainId: CHAIN_IDS.KALYCHAIN
         }
 
         const token1: Token = {
@@ -253,7 +255,7 @@ export function useFarmingSubgraphSimple() {
           symbol: token1Symbol,
           name: token1Symbol,
           decimals: 18,
-          chainId: 3888
+          chainId: CHAIN_IDS.KALYCHAIN
         }
 
         const lpToken: Token = {
@@ -261,7 +263,7 @@ export function useFarmingSubgraphSimple() {
           symbol: `${token0Symbol}-${token1Symbol}`,
           name: `${token0Symbol}-${token1Symbol} LP`,
           decimals: 18,
-          chainId: 3888
+          chainId: CHAIN_IDS.KALYCHAIN
         }
 
         const rewardToken: Token = {
@@ -269,7 +271,7 @@ export function useFarmingSubgraphSimple() {
           symbol: 'KSWAP',
           name: 'KalySwap',
           decimals: 18,
-          chainId: 3888
+          chainId: CHAIN_IDS.KALYCHAIN
         }
 
         // Convert values
@@ -294,9 +296,9 @@ export function useFarmingSubgraphSimple() {
         // Get weight from contract data (preferred) or subgraph fallback
         let poolWeight = contractWeights[pairAddress] || whitelistedPool?.weight || '0'
 
-        console.log(`🏋️ Pool ${token0Symbol}-${token1Symbol}: contractWeight=${contractWeights[pairAddress]}, subgraphWeight=${whitelistedPool?.weight}, finalWeight=${poolWeight}`)
+        farmingLogger.debug(`🏋️ Pool ${token0Symbol}-${token1Symbol}: contractWeight=${contractWeights[pairAddress]}, subgraphWeight=${whitelistedPool?.weight}, finalWeight=${poolWeight}`)
 
-        console.log(`🔍 Pool ${token0Symbol}-${token1Symbol}: rewardRate=${rewardRate.toString()}, totalStaked=${totalStaked.toString()}, weight=${poolWeight}, userStaked=${userStakedAmount.toString()}`)
+        farmingLogger.debug(`🔍 Pool ${token0Symbol}-${token1Symbol}: rewardRate=${rewardRate.toString()}, totalStaked=${totalStaked.toString()}, weight=${poolWeight}, userStaked=${userStakedAmount.toString()}`)
 
         return {
           stakingRewardAddress: pool.address,
@@ -328,10 +330,10 @@ export function useFarmingSubgraphSimple() {
 
       setStakingInfos(stakingInfos)
       setIsLoading(false)
-      console.log(`✅ Loaded ${stakingInfos.length} farms from subgraph`)
+      farmingLogger.debug(`✅ Loaded ${stakingInfos.length} farms from subgraph`)
 
     } catch (err) {
-      console.error('❌ Error fetching farming data:', err)
+      farmingLogger.error('❌ Error fetching farming data:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch farming data')
       setIsLoading(false)
     }

@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +13,7 @@ import SwapConfirmationModal from './SwapConfirmationModal';
 import ErrorDisplay from './ErrorDisplay';
 import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
 import { useSwapTransactions } from '@/hooks/useSwapTransactions';
+import { swapLogger } from '@/lib/logger';
 
 // Wagmi imports for wallet interaction
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
@@ -78,7 +81,7 @@ export default function MultichainSwapInterface({
 
   // Debug: Log chain ID changes
   useEffect(() => {
-    console.log('🔗 MultichainSwapInterface chainId changed:', {
+    swapLogger.debug('🔗 MultichainSwapInterface chainId changed:', {
       chainId,
       isConnected,
       address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'none'
@@ -90,7 +93,7 @@ export default function MultichainSwapInterface({
 
   // Debug logging for token loading
   useEffect(() => {
-    console.log('🔍 MultichainSwapInterface token loading status:', {
+    swapLogger.debug('🔍 MultichainSwapInterface token loading status:', {
       chainId,
       tokensLoading,
       tokensError,
@@ -105,7 +108,7 @@ export default function MultichainSwapInterface({
       return null;
     }
 
-    console.log('🔍 MultichainSwapInterface supportedTokens:', supportedTokens.map(t => ({ symbol: t.symbol, isNative: t.isNative })));
+    swapLogger.debug('🔍 MultichainSwapInterface supportedTokens:', supportedTokens.map(t => ({ symbol: t.symbol, isNative: t.isNative })));
 
     // Find native token
     const nativeToken = supportedTokens.find(token => token.isNative);
@@ -121,7 +124,7 @@ export default function MultichainSwapInterface({
       stablecoin = supportedTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
     }
 
-    console.log('🔍 MultichainSwapInterface defaultTokenPair:', {
+    swapLogger.debug('🔍 MultichainSwapInterface defaultTokenPair:', {
       chainId,
       nativeToken: nativeToken?.symbol,
       stablecoin: stablecoin?.symbol
@@ -198,7 +201,7 @@ export default function MultichainSwapInterface({
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
 
   // DEX swap hook with proper client injection
-  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, isInternalWallet } = useDexSwap(chainId || 3888);
+  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, isInternalWallet } = useDexSwap(chainId || CHAIN_IDS.KALYCHAIN);
 
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -226,10 +229,10 @@ export default function MultichainSwapInterface({
   } = useSwapErrorHandler({
     maxRetries: 3,
     onRetrySuccess: () => {
-      console.log('✅ Retry successful');
+      swapLogger.debug('✅ Retry successful');
     },
     onRetryFailed: (error) => {
-      console.error('❌ Retry failed after max attempts:', error);
+      swapLogger.error('❌ Retry failed after max attempts:', error);
     }
   });
 
@@ -249,7 +252,7 @@ export default function MultichainSwapInterface({
   const dexName = useMemo(() => {
     if (!chainId || !isChainSupported(chainId)) return '';
     switch (chainId) {
-      case 3888: return 'KalySwap';
+      case CHAIN_IDS.KALYCHAIN: return 'KalySwap';
       case 56: return 'PancakeSwap';
       case 42161: return 'Camelot';
       default: return '';
@@ -260,7 +263,7 @@ export default function MultichainSwapInterface({
   const getExplorerUrl = (txHash: string) => {
     if (!chainId) return '';
     switch (chainId) {
-      case 3888: return `https://kalyscan.io/tx/${txHash}`;
+      case CHAIN_IDS.KALYCHAIN: return `https://kalyscan.io/tx/${txHash}`;
       case 56: return `https://bscscan.com/tx/${txHash}`;
       case 42161: return `https://arbiscan.io/tx/${txHash}`;
       default: return '';
@@ -301,7 +304,7 @@ export default function MultichainSwapInterface({
         setQuote(quoteResult);
         setSwapState(prev => ({ ...prev, toAmount: quoteResult.amountOut }));
       } catch (error) {
-        console.error('Quote error:', error);
+        swapLogger.error('Quote error:', error);
         setQuote(null);
         setSwapState(prev => ({ ...prev, toAmount: '' }));
       } finally {
@@ -449,7 +452,7 @@ export default function MultichainSwapInterface({
       refreshBalances();
 
     } catch (error) {
-      console.error('Swap error:', error);
+      swapLogger.error('Swap error:', error);
       handleError(error as Error);
       setCurrentStep('idle');
     } finally {
@@ -464,7 +467,7 @@ export default function MultichainSwapInterface({
     try {
       await switchChain({ chainId: targetChainId });
     } catch (error) {
-      console.error('Chain switch error:', error);
+      swapLogger.error('Chain switch error:', error);
       handleError(error as Error);
     }
   };

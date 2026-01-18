@@ -6,6 +6,7 @@ import { parseUnits } from 'viem';
 import { useBridgeContext } from './useBridgeContext';
 import { useWallet } from '../useWallet';
 import { loggerHelpers } from '@/utils/bridge/logger';
+import { bridgeLogger } from '@/lib/logger';
 
 interface UseTokenApprovalParams {
   tokenIndex: number | null;
@@ -57,7 +58,7 @@ export function useTokenApproval({ tokenIndex, amount, enabled = true }: UseToke
 
         // Check if approval is required using Hyperlane SDK
         const tokenAmount = token.amount(amountWei.toString());
-        console.log('🔍 Checking approval for:', {
+        bridgeLogger.debug('🔍 Checking approval for:', {
           token: token.symbol,
           standard: token.standard,
           amount: amount,
@@ -70,7 +71,7 @@ export function useTokenApproval({ tokenIndex, amount, enabled = true }: UseToke
           owner: account
         });
 
-        console.log('✅ Approval check result:', isApprovalRequired);
+        bridgeLogger.debug('✅ Approval check result:', isApprovalRequired);
         setIsApproveRequired(isApprovalRequired);
 
         if (isApprovalRequired) {

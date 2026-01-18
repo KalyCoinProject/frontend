@@ -1,3 +1,4 @@
+import { authLogger } from '@/lib/logger';
 /**
  * Authentication utilities for JWT token management
  * Handles token validation, expiration checks, and automatic cleanup
@@ -31,7 +32,7 @@ export function decodeJWTPayload(token: string): TokenPayload | null {
     
     return decoded as TokenPayload;
   } catch (error) {
-    console.warn('Failed to decode JWT token:', error);
+    authLogger.warn('Failed to decode JWT token:', error);
     return null;
   }
 }
@@ -64,14 +65,14 @@ export function getAuthToken(): string | null {
 
     // Check if token is expired before returning
     if (isTokenExpired(token)) {
-      console.warn('Auth token is expired, removing from localStorage');
+      authLogger.warn('Auth token is expired, removing from localStorage');
       localStorage.removeItem('auth_token');
       return null;
     }
 
     return token;
   } catch (error) {
-    console.error('Error accessing localStorage:', error);
+    authLogger.error('Error accessing localStorage:', error);
     return null;
   }
 }
@@ -83,7 +84,7 @@ export function setAuthToken(token: string): void {
   try {
     localStorage.setItem('auth_token', token);
   } catch (error) {
-    console.error('Error setting auth token:', error);
+    authLogger.error('Error setting auth token:', error);
   }
 }
 
@@ -94,7 +95,7 @@ export function removeAuthToken(): void {
   try {
     localStorage.removeItem('auth_token');
   } catch (error) {
-    console.error('Error removing auth token:', error);
+    authLogger.error('Error removing auth token:', error);
   }
 }
 

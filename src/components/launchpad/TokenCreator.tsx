@@ -1,5 +1,7 @@
 'use client';
 
+import { launchpadLogger } from '@/lib/logger';
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -160,7 +162,7 @@ export default function TokenCreator() {
       const feeInKLC = parseFloat((Number(fee) / 1e18).toFixed(6));
       setActualFee(feeInKLC.toString());
     } catch (error) {
-      console.warn('Failed to fetch actual fee from contract:', error);
+      launchpadLogger.warn('Failed to fetch actual fee from contract:', error);
       // Fallback to configured fee
       setActualFee(activeTokenType === 'standard' ? CONTRACT_FEES.STANDARD_TOKEN : CONTRACT_FEES.LIQUIDITY_GENERATOR_TOKEN);
     }
@@ -282,13 +284,13 @@ export default function TokenCreator() {
       const creationFee = contractFee as bigint;
 
       // Step 1: Create the token
-      console.log(`🚀 Creating ${activeTokenType === 'standard' ? 'Standard' : 'Liquidity Generator'} Token:`, {
+      launchpadLogger.debug(`🚀 Creating ${activeTokenType === 'standard' ? 'Standard' : 'Liquidity Generator'} Token:`, {
         address: factoryAddress,
         function: 'create',
         fee: `${(Number(creationFee) / 1e18).toFixed(6)} KLC`
       });
 
-      console.log('📝 Deploying token contract...');
+      launchpadLogger.debug('📝 Deploying token contract...');
 
       let hash: `0x${string}`;
 
@@ -429,11 +431,11 @@ export default function TokenCreator() {
         }
       }
 
-      console.log(`📝 Transaction hash: ${hash}`);
-      console.log('⏳ Waiting for transaction confirmation...');
+      launchpadLogger.debug(`📝 Transaction hash: ${hash}`);
+      launchpadLogger.debug('⏳ Waiting for transaction confirmation...');
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      launchpadLogger.debug(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
 
       // Step 2: Parse token address from events
       let tokenAddress: string | null = null;
@@ -451,7 +453,7 @@ export default function TokenCreator() {
                 const addressHex = log.topics[1];
                 if (addressHex && addressHex.length >= 42) {
                   tokenAddress = `0x${addressHex.slice(-40)}`;
-                  console.log(`Found standard token address from event: ${tokenAddress}`);
+                  launchpadLogger.debug(`Found standard token address from event: ${tokenAddress}`);
                   break;
                 }
               } else {
@@ -459,14 +461,14 @@ export default function TokenCreator() {
                 const addressHex = log.topics[2];
                 if (addressHex && addressHex.length >= 42) {
                   tokenAddress = `0x${addressHex.slice(-40)}`;
-                  console.log(`Found liquidity generator token address from event: ${tokenAddress}`);
+                  launchpadLogger.debug(`Found liquidity generator token address from event: ${tokenAddress}`);
                   break;
                 }
               }
             }
           }
         } catch (error) {
-          console.warn('Error parsing log:', error);
+          launchpadLogger.warn('Error parsing log:', error);
         }
       }
 
@@ -474,7 +476,7 @@ export default function TokenCreator() {
         throw new Error('Could not determine token address from transaction logs');
       }
 
-      console.log(`🎉 Token created at: ${tokenAddress}`);
+      launchpadLogger.debug(`🎉 Token created at: ${tokenAddress}`);
       setCreatedToken(tokenAddress);
       setCurrentStep('complete');
 
@@ -487,7 +489,7 @@ export default function TokenCreator() {
       });
 
     } catch (err) {
-      console.error('❌ Error creating token:', err);
+      launchpadLogger.error('❌ Error creating token:', err);
       setError(err instanceof Error ? err.message : 'Failed to create token');
       setCurrentStep('idle');
     } finally {

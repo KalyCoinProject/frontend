@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // Temporarily disabled to debug console errors
+  reactStrictMode: true,
   typescript: {
-    // Allow production builds to complete even if there are TypeScript errors
-    // This is needed because wagmi 2.19+ has breaking type changes for custom connectors
-    ignoreBuildErrors: true,
+    // TypeScript errors fixed - fail build on type errors for safety
+    ignoreBuildErrors: false,
   },
   async rewrites() {
     // Only use rewrites in development

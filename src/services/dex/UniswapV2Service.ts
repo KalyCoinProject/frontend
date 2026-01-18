@@ -1,3 +1,4 @@
+import { dexLogger } from '@/lib/logger';
 // Camelot DEX service implementation
 // Handles all Camelot V2-specific operations on Arbitrum
 
@@ -52,7 +53,7 @@ export class UniswapV2Service extends BaseDexService {
   async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<QuoteResult> {
     // Check if this is a wrap or unwrap operation
     if (this.isWrapOperation(tokenIn, tokenOut) || this.isUnwrapOperation(tokenIn, tokenOut)) {
-      console.log('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
+      dexLogger.debug('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
 
       return {
         amountOut: amountIn, // 1:1 ratio
@@ -88,7 +89,7 @@ export class UniswapV2Service extends BaseDexService {
 
       if (isWrap) {
         // ETH → WETH: Call deposit() with ETH value
-        console.log('🔄 Wrapping ETH to WETH via WETH contract...');
+        dexLogger.debug('🔄 Wrapping ETH to WETH via WETH contract...');
 
         // WETH ABI for deposit function
         const WETH_ABI = [
@@ -111,12 +112,12 @@ export class UniswapV2Service extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Wrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Wrap transaction sent: ${txHash}`);
         return txHash;
 
       } else if (isUnwrap) {
         // WETH → ETH: Call withdraw()
-        console.log('🔄 Unwrapping WETH to ETH via WETH contract...');
+        dexLogger.debug('🔄 Unwrapping WETH to ETH via WETH contract...');
 
         // WETH ABI for withdraw function
         const WETH_ABI = [
@@ -144,7 +145,7 @@ export class UniswapV2Service extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Unwrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Unwrap transaction sent: ${txHash}`);
         return txHash;
       }
 
@@ -213,7 +214,7 @@ export class UniswapV2Service extends BaseDexService {
 
       return txHash;
     } catch (error) {
-      console.error('Uniswap V2 executeSwap error:', error);
+      dexLogger.error('Uniswap V2 executeSwap error:', error);
       if (error instanceof DexError) {
         throw error;
       }
@@ -249,7 +250,7 @@ export class UniswapV2Service extends BaseDexService {
 
       return usdcReserve / ethReserve;
     } catch (error) {
-      console.error('Error getting ETH price:', error);
+      dexLogger.error('Error getting ETH price:', error);
       return 0;
     }
   }
@@ -285,7 +286,7 @@ export class UniswapV2Service extends BaseDexService {
 
       return arbPriceInETH * ethPriceUSD;
     } catch (error) {
-      console.error('Error getting ARB price:', error);
+      dexLogger.error('Error getting ARB price:', error);
       return 0;
     }
   }
@@ -295,14 +296,14 @@ export class UniswapV2Service extends BaseDexService {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
-    console.log(`[${this.getName()}] Finding route:`, {
+    dexLogger.debug(`[${this.getName()}] Finding route:`, {
       tokenIn: `${tokenIn.symbol} (${addressIn})`,
       tokenOut: `${tokenOut.symbol} (${addressOut})`
     });
 
     // Check direct pair first
     const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
-    console.log(`[${this.getName()}] Direct pair exists:`, directPairExists);
+    dexLogger.debug(`[${this.getName()}] Direct pair exists:`, directPairExists);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -317,7 +318,7 @@ export class UniswapV2Service extends BaseDexService {
           this.canSwapDirectly(wethToken, tokenOut, publicClient)
         ]);
 
-        console.log(`[${this.getName()}] Can route via WETH:`, canRouteViaWETH);
+        dexLogger.debug(`[${this.getName()}] Can route via WETH:`, canRouteViaWETH);
         if (canRouteViaWETH[0] && canRouteViaWETH[1]) {
           return [addressIn, wethAddress, addressOut];
         }
@@ -332,7 +333,7 @@ export class UniswapV2Service extends BaseDexService {
         this.canSwapDirectly(usdcToken, tokenOut, publicClient)
       ]);
 
-      console.log(`[${this.getName()}] Can route via USDC:`, canRouteViaUSDC);
+      dexLogger.debug(`[${this.getName()}] Can route via USDC:`, canRouteViaUSDC);
       if (canRouteViaUSDC[0] && canRouteViaUSDC[1]) {
         return [addressIn, usdcToken.address, addressOut];
       }
@@ -346,7 +347,7 @@ export class UniswapV2Service extends BaseDexService {
         this.canSwapDirectly(usdtToken, tokenOut, publicClient)
       ]);
 
-      console.log(`[${this.getName()}] Can route via USDT:`, canRouteViaUSDT);
+      dexLogger.debug(`[${this.getName()}] Can route via USDT:`, canRouteViaUSDT);
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {
         return [addressIn, usdtToken.address, addressOut];
       }

@@ -13,6 +13,7 @@ import { useSingleFarmData } from '@/hooks/farming/useSingleFarmData'
 import { BigNumber } from 'ethers'
 import { formatNumber } from '@/lib/utils'
 import TokenPairDisplay from '@/components/farming/TokenPairDisplay'
+import { farmingLogger } from '@/lib/logger'
 import StakingModal from '@/components/farming/StakingModal'
 import UnstakingModal from '@/components/farming/UnstakingModal'
 import ClaimRewardModal from '@/components/farming/ClaimRewardModal'
@@ -43,7 +44,7 @@ export default function FarmManagePage() {
   // stakingInfo is now directly returned from useSingleFarmData hook
 
   // Debug logging
-  console.log('🔍 Individual farm page debug:', {
+  farmingLogger.debug('🔍 Individual farm page debug:', {
     token0Symbol,
     token1Symbol,
     version,
@@ -109,13 +110,13 @@ export default function FarmManagePage() {
 
         setUserLiquidityUnstaked(mockTokenAmount)
 
-        console.log('💰 User LP balance:', {
+        farmingLogger.debug('💰 User LP balance:', {
           lpTokenAddress,
           balance: balance.toString(),
           formatted: mockTokenAmount.toSignificant(6)
         })
       } catch (error) {
-        console.error('Error fetching user LP balance:', error)
+        farmingLogger.error('Error fetching user LP balance:', error)
         setUserLiquidityUnstaked(null)
       }
     }
@@ -133,7 +134,7 @@ export default function FarmManagePage() {
 
   // Create refresh function to update data after successful transactions
   const handleRefreshData = useCallback(() => {
-    console.log('🔄 Refreshing farm data after successful transaction...')
+    farmingLogger.debug('🔄 Refreshing farm data after successful transaction...')
     // Background refresh without loading state - follows swaps page pattern
     refetch()
 

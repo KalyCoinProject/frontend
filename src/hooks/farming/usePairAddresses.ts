@@ -5,6 +5,7 @@ import { useWallet } from '@/hooks/useWallet'
 import { Contract, ethers } from 'ethers'
 import factoryABI from '@/config/abis/dex/factoryABI.json'
 import { KALYCHAIN_TOKENS } from '@/config/farming'
+import { farmingLogger } from '@/lib/logger'
 
 interface PairInfo {
   token0: string
@@ -29,7 +30,7 @@ export function usePairAddresses() {
       const provider = new ethers.providers.JsonRpcProvider('https://rpc.kalychain.io/rpc')
       return new Contract(FACTORY_ADDRESS, factoryABI, provider)
     } catch (error) {
-      console.error('Error creating factory contract:', error)
+      farmingLogger.error('Error creating factory contract:', error)
       return null
     }
   }, [])
@@ -51,7 +52,7 @@ export function usePairAddresses() {
       
       return null
     } catch (error) {
-      console.error('Error getting pair address:', error)
+      farmingLogger.error('Error getting pair address:', error)
       return null
     }
   }, [getFactoryContract])
@@ -107,7 +108,7 @@ export function usePairAddresses() {
         setPairAddresses(newPairAddresses)
       }
     } catch (error) {
-      console.error('Error fetching pair addresses:', error)
+      farmingLogger.error('Error fetching pair addresses:', error)
       // Set known addresses as fallback
       setPairAddresses({
         'WKLC_USDT': '0x25FDDaF836d12dC5e285823a644bb86E0b79c8e2'

@@ -1,3 +1,4 @@
+import { swapLogger } from '@/lib/logger';
 // Multichain token balance hook
 // This hook provides token balances for any supported chain
 
@@ -74,7 +75,7 @@ export function useMultichainTokenBalance(
         symbol: token.symbol,
       };
     } catch (error) {
-      console.error(`Error fetching balance for ${token.symbol}:`, error);
+      swapLogger.error(`Error fetching balance for ${token.symbol}:`, error);
       return null;
     }
   }, [address, publicClient, isConnected]);
@@ -102,7 +103,7 @@ export function useMultichainTokenBalance(
 
       setBalances(newBalances);
     } catch (error) {
-      console.error('Error fetching token balances:', error);
+      swapLogger.error('Error fetching token balances:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch balances');
     } finally {
       setIsLoading(false);
@@ -206,7 +207,7 @@ export function useNativeTokenBalance(chainId: number | undefined, enabled: bool
       setBalance(balance.toString());
       setFormattedBalance(formatted);
     } catch (error) {
-      console.error('Error fetching native balance:', error);
+      swapLogger.error('Error fetching native balance:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch native balance');
     } finally {
       setIsLoading(false);

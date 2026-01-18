@@ -12,6 +12,8 @@ import { createMulticallService } from '@/utils/multicall'
 import { contractCache, CacheKeys } from '@/utils/contractCache'
 import { ethers } from 'ethers'
 import stakingRewardsABI from '@/config/abis/dex/stakingRewardsABI.json'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 // Mock TokenAmount implementation (same as original)
 class MockTokenAmount {
@@ -23,7 +25,7 @@ class MockTokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(Math.min(digits, 6))
     } catch (error) {
-      console.error('Error in toSignificant:', error)
+      farmingLogger.error('Error in toSignificant:', error)
       return '0'
     }
   }
@@ -34,7 +36,7 @@ class MockTokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(digits)
     } catch (error) {
-      console.error('Error in toFixed:', error)
+      farmingLogger.error('Error in toFixed:', error)
       return '0'
     }
   }
@@ -44,7 +46,7 @@ class MockTokenAmount {
       const formatted = formatUnits(this.raw, this.token.decimals)
       return parseFloat(formatted)
     } catch (error) {
-      console.error('Error in toNumber:', error)
+      farmingLogger.error('Error in toNumber:', error)
       return 0
     }
   }
@@ -103,7 +105,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
       symbol: `${token0.symbol}-${token1.symbol}`,
       name: `${token0.name}-${token1.name} LP`,
       decimals: 18,
-      chainId: chainId || 3888
+      chainId: chainId || CHAIN_IDS.KALYCHAIN
     }
 
     return {
@@ -141,7 +143,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
       setIsLoading(true)
       setError(null)
 
-      console.log(`🚀 Fetching single farm data: ${token0Symbol}/${token1Symbol}`)
+      farmingLogger.debug(`🚀 Fetching single farm data: ${token0Symbol}/${token1Symbol}`)
 
       // Check cache first
       const poolKey = `${token0Symbol}_${token1Symbol}`
@@ -151,11 +153,11 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
         throw new Error(`No pair address found for ${poolKey}`)
       }
 
-      const cacheKey = CacheKeys.singleFarmData(chainId || 3888, pairAddress, address)
+      const cacheKey = CacheKeys.singleFarmData(chainId || CHAIN_IDS.KALYCHAIN, pairAddress, address)
       const cachedData = contractCache.get<DoubleSideStakingInfo>(cacheKey)
       
       if (cachedData) {
-        console.log('📦 Using cached single farm data')
+        farmingLogger.debug('📦 Using cached single farm data')
         setStakingInfo(cachedData)
         setIsLoading(false)
         return
@@ -167,7 +169,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
         symbol: poolConfig.tokens[0].symbol,
         name: poolConfig.tokens[0].name,
         decimals: poolConfig.tokens[0].decimals,
-        chainId: chainId || 3888
+        chainId: chainId || CHAIN_IDS.KALYCHAIN
       }
 
       const token1: Token = {
@@ -175,7 +177,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
         symbol: poolConfig.tokens[1].symbol,
         name: poolConfig.tokens[1].name,
         decimals: poolConfig.tokens[1].decimals,
-        chainId: chainId || 3888
+        chainId: chainId || CHAIN_IDS.KALYCHAIN
       }
 
       // Create provider and get contracts
@@ -188,9 +190,9 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
       }
 
       // Use multicall for this single farm
-      const multicall = createMulticallService(provider, chainId || 3888)
+      const multicall = createMulticallService(provider, chainId || CHAIN_IDS.KALYCHAIN)
 
-      console.log('📡 Executing multicall for single farm...')
+      farmingLogger.debug('📡 Executing multicall for single farm...')
 
       // Batch LiquidityPoolManager calls
       const liquidityManagerCalls = [
@@ -216,7 +218,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
 
       const stakingResults = await multicall.batchSameContract(stakingContract, stakingCalls)
 
-      console.log('✅ Single farm multicall completed')
+      farmingLogger.debug('✅ Single farm multicall completed')
 
       // Extract results
       const [isWhitelisted, weights, klcLiquidity, stakes] = liquidityManagerResults
@@ -231,7 +233,7 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
         symbol: `${token0.symbol}-${token1.symbol}`,
         name: `${token0.name}-${token1.name} LP`,
         decimals: 18,
-        chainId: chainId || 3888
+        chainId: chainId || CHAIN_IDS.KALYCHAIN
       }
 
       // Create TokenAmounts
@@ -282,16 +284,16 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
       contractCache.set(cacheKey, stakingInfo, { ttl: 45 * 1000 }) // 45 second cache
 
       setStakingInfo(stakingInfo)
-      console.log(`✅ Single farm data loaded: ${token0Symbol}/${token1Symbol}`)
+      farmingLogger.debug(`✅ Single farm data loaded: ${token0Symbol}/${token1Symbol}`)
 
     } catch (err) {
-      console.error(`❌ Error fetching single farm data for ${token0Symbol}/${token1Symbol}:`, err)
+      farmingLogger.error(`❌ Error fetching single farm data for ${token0Symbol}/${token1Symbol}:`, err)
       setError(err instanceof Error ? err.message : 'Failed to fetch farm data')
       
       // Set N/A data on error
       if (poolConfig) {
-        const token0: Token = { address: poolConfig.tokens[0].address, symbol: poolConfig.tokens[0].symbol, name: poolConfig.tokens[0].name, decimals: poolConfig.tokens[0].decimals, chainId: chainId || 3888 }
-        const token1: Token = { address: poolConfig.tokens[1].address, symbol: poolConfig.tokens[1].symbol, name: poolConfig.tokens[1].name, decimals: poolConfig.tokens[1].decimals, chainId: chainId || 3888 }
+        const token0: Token = { address: poolConfig.tokens[0].address, symbol: poolConfig.tokens[0].symbol, name: poolConfig.tokens[0].name, decimals: poolConfig.tokens[0].decimals, chainId: chainId || CHAIN_IDS.KALYCHAIN }
+        const token1: Token = { address: poolConfig.tokens[1].address, symbol: poolConfig.tokens[1].symbol, name: poolConfig.tokens[1].name, decimals: poolConfig.tokens[1].decimals, chainId: chainId || CHAIN_IDS.KALYCHAIN }
         const poolKey = `${token0.symbol}_${token1.symbol}`
         const pairAddress = pairAddresses[poolKey] || poolConfig.pairAddress || 'N/A'
         setStakingInfo(createNAStakingInfo(poolConfig, token0, token1, pairAddress))
@@ -306,12 +308,12 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
   }, [fetchSingleFarmData])
 
   const refetch = useCallback(() => {
-    console.log(`🔄 Refetching single farm data: ${token0Symbol}/${token1Symbol}`)
+    farmingLogger.debug(`🔄 Refetching single farm data: ${token0Symbol}/${token1Symbol}`)
     // Clear cache and trigger refresh
     const poolKey = `${token0Symbol}_${token1Symbol}`
     const pairAddress = pairAddresses[poolKey] || poolConfig?.pairAddress
     if (pairAddress) {
-      const cacheKey = CacheKeys.singleFarmData(chainId || 3888, pairAddress, address)
+      const cacheKey = CacheKeys.singleFarmData(chainId || CHAIN_IDS.KALYCHAIN, pairAddress, address)
       contractCache.delete(cacheKey)
     }
     setError(null)

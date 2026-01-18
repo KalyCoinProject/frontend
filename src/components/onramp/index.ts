@@ -1,0 +1,2 @@
+export { AlchemyPayWidget } from './AlchemyPayWidget';
+

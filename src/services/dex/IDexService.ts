@@ -1,7 +1,7 @@
 // Interface for DEX service implementations
 // This provides a common interface for all DEX protocols (KalySwap, PancakeSwap, Uniswap V2)
 
-import { Token, QuoteResult, SwapParams, PairInfo } from '@/config/dex/types';
+import { Token, QuoteResult, SwapParams, PairInfo, AddLiquidityParams, RemoveLiquidityParams, LiquidityPosition } from '@/config/dex/types';
 import type { PublicClient, WalletClient } from 'viem';
 
 export interface IDexService {
@@ -129,6 +129,70 @@ export interface IDexService {
    * @returns Array of token addresses representing the swap route
    */
   getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]>;
+
+  // ===============================
+  // Liquidity Operations
+  // ===============================
+
+  /**
+   * Add liquidity to a token pair
+   * @param params Add liquidity parameters
+   * @param publicClient Public client for blockchain interactions
+   * @param walletClient Wallet client for signing transactions
+   * @returns Transaction hash
+   */
+  addLiquidity(params: AddLiquidityParams, publicClient: PublicClient, walletClient: WalletClient): Promise<string>;
+
+  /**
+   * Remove liquidity from a token pair
+   * @param params Remove liquidity parameters
+   * @param publicClient Public client for blockchain interactions
+   * @param walletClient Wallet client for signing transactions
+   * @returns Transaction hash
+   */
+  removeLiquidity(params: RemoveLiquidityParams, publicClient: PublicClient, walletClient: WalletClient): Promise<string>;
+
+  /**
+   * Get user's liquidity positions
+   * @param userAddress User's wallet address
+   * @param publicClient Public client for blockchain interactions
+   * @returns Array of liquidity positions
+   */
+  getUserLiquidityPositions(userAddress: string, publicClient: PublicClient): Promise<LiquidityPosition[]>;
+
+  /**
+   * Calculate optimal amounts for adding liquidity based on current reserves
+   * @param tokenA First token
+   * @param tokenB Second token
+   * @param amountA Amount of first token
+   * @param publicClient Public client for blockchain interactions
+   * @returns Optimal amount of token B
+   */
+  calculateOptimalLiquidityAmounts(
+    tokenA: Token,
+    tokenB: Token,
+    amountA: string,
+    publicClient: PublicClient
+  ): Promise<{ amountB: string; isNewPair: boolean }>;
+
+  /**
+   * Approve token for router spending
+   * @param token Token to approve
+   * @param amount Amount to approve (use MaxUint256 for unlimited)
+   * @param walletClient Wallet client for signing transactions
+   * @returns Transaction hash
+   */
+  approveToken(token: Token, amount: string, walletClient: WalletClient): Promise<string>;
+
+  /**
+   * Check token approval status
+   * @param token Token to check
+   * @param owner Owner address
+   * @param amount Amount to check approval for
+   * @param publicClient Public client for blockchain interactions
+   * @returns True if approved for at least the specified amount
+   */
+  checkApproval(token: Token, owner: string, amount: string, publicClient: PublicClient): Promise<boolean>;
 }
 
 // Error types for DEX operations

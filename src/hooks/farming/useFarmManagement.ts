@@ -6,6 +6,8 @@ import { DoubleSideStakingInfo, TokenAmount, Token } from '@/types/farming'
 import { BigNumber } from 'ethers'
 import { FARMING_CONFIG, getTokenBySymbol } from '@/config/farming'
 import { useFarmingContracts } from './useFarmingContracts'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 // Mock TokenAmount implementation (same as in useFarmingData)
 class MockTokenAmount implements TokenAmount {
@@ -57,7 +59,7 @@ export function useFarmManagement(token0Symbol: string, token1Symbol: string, ve
         setError(null)
 
         // Use default chainId if not available
-        const currentChainId = chainId || 3888
+        const currentChainId = chainId || CHAIN_IDS.KALYCHAIN
 
         // Find the matching farm configuration
         const allPools = FARMING_CONFIG.DOUBLE_SIDE_STAKING_REWARDS_INFO[currentChainId]?.flat() || []
@@ -152,7 +154,7 @@ export function useFarmManagement(token0Symbol: string, token1Symbol: string, ve
         farmStakingInfo.combinedApr = (farmStakingInfo.swapFeeApr || 0) + (farmStakingInfo.stakingApr || 0)
 
         // Debug logging to check data
-        console.log('🚜 useFarmManagement data:', {
+        farmingLogger.debug('🚜 useFarmManagement data:', {
           pairName: `${token0.symbol}-${token1.symbol}`,
           totalStakedAmount: contractData?.totalStakedAmount?.toString() || 'N/A',
           totalStakedInUsd: farmStakingInfo.totalStakedInUsd?.toFixed(6) || 'N/A',
@@ -179,7 +181,7 @@ export function useFarmManagement(token0Symbol: string, token1Symbol: string, ve
             const userUnstakedAmount = new MockTokenAmount(lpToken, balance)
             setUserLiquidityUnstaked(userUnstakedAmount)
           } catch (error) {
-            console.error('Error fetching LP token balance:', error)
+            farmingLogger.error('Error fetching LP token balance:', error)
             setUserLiquidityUnstaked(new MockTokenAmount(lpToken, BigNumber.from(0)))
           }
         } else {
@@ -187,7 +189,7 @@ export function useFarmManagement(token0Symbol: string, token1Symbol: string, ve
         }
 
       } catch (err) {
-        console.error('Error fetching farm management data:', err)
+        farmingLogger.error('Error fetching farm management data:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch farm data')
       } finally {
         setIsLoading(false)

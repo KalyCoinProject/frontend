@@ -1,3 +1,4 @@
+import { launchpadLogger } from '@/lib/logger';
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePublicClient } from 'wagmi'
 import { useHydration } from '@/hooks/useHydration'
@@ -263,7 +264,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
       try {
         // Skip if wagmi not ready
         if (!publicClient || !isHydrated) {
-          console.warn('PublicClient not ready for contract reads')
+          launchpadLogger.warn('PublicClient not ready for contract reads')
           return null
         }
 
@@ -333,7 +334,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
           creator: address // Fallback, could be enhanced with owner() call
         }
       } catch (error) {
-        console.warn('Contract read failed, using fallback data:', error)
+        launchpadLogger.warn('Contract read failed, using fallback data:', error)
         return null
       }
     }
@@ -358,7 +359,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
       const progress = hardCap !== '0' ? (raisedInKLC / hardCapAmount) * 100 : 0
 
       // Debug logging
-      console.log('Progress calculation:', {
+      launchpadLogger.debug('Progress calculation:', {
         totalRaised,
         raisedAmount,
         raisedInKLC,
@@ -511,7 +512,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
               lpTokensWithdrawn: false
             }
           } catch (error) {
-            console.warn('Could not fetch live contract data:', error)
+            launchpadLogger.warn('Could not fetch live contract data:', error)
           }
         }
 
@@ -530,7 +531,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
         setLastFetchTime(now)
 
       } catch (err) {
-        console.error('Error fetching project data:', err)
+        launchpadLogger.error('Error fetching project data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load project')
       } finally {
         // Only set loading to false if we were showing loading (initial load or forced refresh)

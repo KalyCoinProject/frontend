@@ -1,5 +1,9 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
+import { launchpadLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -309,9 +313,9 @@ export default function PresaleCreator() {
       try {
         const parsedDraft = JSON.parse(savedDraft);
         setFormData(parsedDraft);
-        console.log('📝 Loaded draft data from localStorage');
+        launchpadLogger.debug('📝 Loaded draft data from localStorage');
       } catch (error) {
-        console.error('Error loading draft data:', error);
+        launchpadLogger.error('Error loading draft data:', error);
         localStorage.removeItem(PRESALE_DRAFT_KEY);
       }
     }
@@ -561,10 +565,10 @@ export default function PresaleCreator() {
       // Clear draft data from localStorage after successful save
       localStorage.removeItem(PRESALE_DRAFT_KEY);
 
-      console.log('✅ Project saved to database:', savedProject);
+      launchpadLogger.debug('✅ Project saved to database:', savedProject);
       return savedProject;
     } catch (error) {
-      console.error('❌ Error saving project to database:', error);
+      launchpadLogger.error('❌ Error saving project to database:', error);
       throw error;
     } finally {
       setIsSavingToDatabase(false);
@@ -706,15 +710,15 @@ export default function PresaleCreator() {
       setError(null);
       setCurrentStep('idle');
 
-      console.log('🚀 Starting presale creation process...');
+      launchpadLogger.debug('🚀 Starting presale creation process...');
 
       // Step 1: Get token information
-      console.log('📋 Getting token information...');
+      launchpadLogger.debug('📋 Getting token information...');
       const tokenInfo = await getTokenInfo(formData.saleToken);
       setTokenDecimals(tokenInfo.decimals);
       setTokenSymbol(tokenInfo.symbol);
 
-      console.log(`Token: ${tokenInfo.symbol} (${tokenInfo.name}), Decimals: ${tokenInfo.decimals}`);
+      launchpadLogger.debug(`Token: ${tokenInfo.symbol} (${tokenInfo.name}), Decimals: ${tokenInfo.decimals}`);
 
       // Step 2: Calculate required token amounts with proper decimals
       const tokenCalc = calculateRequiredTokens(
@@ -727,10 +731,10 @@ export default function PresaleCreator() {
 
       setRequiredTokens(tokenCalc.totalRequired);
 
-      console.log(`Required tokens calculation:`);
-      console.log(`- Presale tokens: ${formatUnits(tokenCalc.presaleTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
-      console.log(`- Liquidity tokens: ${formatUnits(tokenCalc.liquidityTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
-      console.log(`- Total required: ${formatUnits(tokenCalc.totalRequired, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`Required tokens calculation:`);
+      launchpadLogger.debug(`- Presale tokens: ${formatUnits(tokenCalc.presaleTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`- Liquidity tokens: ${formatUnits(tokenCalc.liquidityTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`- Total required: ${formatUnits(tokenCalc.totalRequired, tokenInfo.decimals)} ${tokenInfo.symbol}`);
 
       const factoryAddress = getPresaleFactoryAddress();
 
@@ -738,22 +742,22 @@ export default function PresaleCreator() {
       setCurrentStep('approving');
       setIsApproving(true);
 
-      console.log('🔍 Checking token allowance...');
+      launchpadLogger.debug('🔍 Checking token allowance...');
       const currentAllowance = await checkTokenAllowance(formData.saleToken, factoryAddress);
 
       if (currentAllowance < tokenCalc.totalRequired) {
-        console.log(`💰 Approving ${formatUnits(tokenCalc.totalRequired, tokenInfo.decimals)} ${tokenInfo.symbol}...`);
+        launchpadLogger.debug(`💰 Approving ${formatUnits(tokenCalc.totalRequired, tokenInfo.decimals)} ${tokenInfo.symbol}...`);
         await approveTokens(formData.saleToken, factoryAddress, tokenCalc.totalRequired);
-        console.log('✅ Token approval confirmed');
+        launchpadLogger.debug('✅ Token approval confirmed');
       } else {
-        console.log('✅ Sufficient token allowance already exists');
+        launchpadLogger.debug('✅ Sufficient token allowance already exists');
       }
 
       setIsApproving(false);
 
       // Step 4: Create presale with gas estimation
       setCurrentStep('creating');
-      console.log('🏗️ Creating presale contract...');
+      launchpadLogger.debug('🏗️ Creating presale contract...');
 
       const contractParams = formatPresaleContractParams();
       const creationFee = parseEther(getCreationFee());
@@ -782,9 +786,9 @@ export default function PresaleCreator() {
 
         // Add 10% buffer to gas estimate
         gasLimit = (gasEstimate * BigInt(110)) / BigInt(100);
-        console.log(`Gas estimated: ${gasEstimate}, using: ${gasLimit}`);
+        launchpadLogger.debug(`Gas estimated: ${gasEstimate}, using: ${gasLimit}`);
       } catch (error) {
-        console.warn('Gas estimation failed, using fallback:', error);
+        launchpadLogger.warn('Gas estimation failed, using fallback:', error);
         gasLimit = BigInt(3500000); // Fallback gas limit
       }
 
@@ -888,11 +892,11 @@ export default function PresaleCreator() {
         });
       }
 
-      console.log(`📝 Transaction hash: ${hash}`);
-      console.log('⏳ Waiting for transaction confirmation...');
+      launchpadLogger.debug(`📝 Transaction hash: ${hash}`);
+      launchpadLogger.debug('⏳ Waiting for transaction confirmation...');
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      launchpadLogger.debug(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
 
       // Step 5: Parse presale address from events
       let presaleAddress: string | null = null;
@@ -905,17 +909,17 @@ export default function PresaleCreator() {
             if (log.topics.length >= 3) {
               // PresaleCreated(address,address) - topics[2] has presale address
               presaleAddress = `0x${log.topics[2]?.slice(-40)}`;
-              console.log(`Found presale address from event: ${presaleAddress}`);
+              launchpadLogger.debug(`Found presale address from event: ${presaleAddress}`);
               break;
             } else if (log.topics.length >= 2) {
               // PresaleCreated(address) - topics[1] has presale address
               presaleAddress = `0x${log.topics[1]?.slice(-40)}`;
-              console.log(`Found presale address from event: ${presaleAddress}`);
+              launchpadLogger.debug(`Found presale address from event: ${presaleAddress}`);
               break;
             }
           }
         } catch (error) {
-          console.warn('Error parsing log:', error);
+          launchpadLogger.warn('Error parsing log:', error);
         }
       }
 
@@ -926,7 +930,7 @@ export default function PresaleCreator() {
               log.address.toLowerCase() !== factoryAddress.toLowerCase() &&
               log.address.toLowerCase() !== formData.saleToken.toLowerCase()) {
             presaleAddress = log.address;
-            console.log(`Found presale address from contract creation: ${presaleAddress}`);
+            launchpadLogger.debug(`Found presale address from contract creation: ${presaleAddress}`);
             break;
           }
         }
@@ -936,14 +940,14 @@ export default function PresaleCreator() {
         throw new Error('Could not determine presale address from transaction logs');
       }
 
-      console.log(`🎉 Presale created at: ${presaleAddress}`);
+      launchpadLogger.debug(`🎉 Presale created at: ${presaleAddress}`);
       setCreatedPresale(presaleAddress);
 
       // Step 6: Set router address
       setCurrentStep('setting-router');
       setIsSettingRouter(true);
 
-      console.log('🔧 Setting router address...');
+      launchpadLogger.debug('🔧 Setting router address...');
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
 
       try {
@@ -974,9 +978,9 @@ export default function PresaleCreator() {
         }
 
         await publicClient.waitForTransactionReceipt({ hash: setRouterHash });
-        console.log('✅ Router address set successfully');
+        launchpadLogger.debug('✅ Router address set successfully');
       } catch (error) {
-        console.warn('⚠️ Failed to set router address:', error);
+        launchpadLogger.warn('⚠️ Failed to set router address:', error);
         // Don't fail the entire process for router setup
       }
 
@@ -986,7 +990,7 @@ export default function PresaleCreator() {
       setCurrentStep('setting-lplock');
       setIsSettingLPLock(true);
 
-      console.log('📝 Configuring LP token locking...');
+      launchpadLogger.debug('📝 Configuring LP token locking...');
       const lpLockSettings = formatLPLockSettings();
 
       try {
@@ -1017,9 +1021,9 @@ export default function PresaleCreator() {
         }
 
         await publicClient.waitForTransactionReceipt({ hash: setLockHash });
-        console.log(`✅ LP lock settings configured: ${lpLockSettings.lockDuration} seconds, recipient: ${lpLockSettings.recipient}`);
+        launchpadLogger.debug(`✅ LP lock settings configured: ${lpLockSettings.lockDuration} seconds, recipient: ${lpLockSettings.recipient}`);
       } catch (error) {
-        console.warn('⚠️ Failed to configure LP locking:', error);
+        launchpadLogger.warn('⚠️ Failed to configure LP locking:', error);
         // Don't fail the entire process for LP lock setup
       }
 
@@ -1027,16 +1031,16 @@ export default function PresaleCreator() {
 
       // Step 8: Save to database
       setCurrentStep('saving');
-      console.log('💾 Saving project to database...');
+      launchpadLogger.debug('💾 Saving project to database...');
       try {
         const savedProject = await saveProjectToDatabase(
           presaleAddress,
           hash,
           Number(receipt.blockNumber)
         );
-        console.log('✅ Project successfully saved to database:', savedProject.id);
+        launchpadLogger.debug('✅ Project successfully saved to database:', savedProject.id);
       } catch (dbError) {
-        console.error('❌ Failed to save to database, but blockchain transaction succeeded:', dbError);
+        launchpadLogger.error('❌ Failed to save to database, but blockchain transaction succeeded:', dbError);
         setError(`Presale created successfully, but failed to save project details: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
       }
 
@@ -1069,7 +1073,7 @@ export default function PresaleCreator() {
       });
 
     } catch (err) {
-      console.error('❌ Error creating presale:', err);
+      launchpadLogger.error('❌ Error creating presale:', err);
       setError(err instanceof Error ? err.message : 'Failed to create presale');
       setCurrentStep('idle');
     } finally {
@@ -1619,7 +1623,7 @@ export default function PresaleCreator() {
               <h4 className="font-medium text-white mb-1">DEX Router Configuration</h4>
               <div className="text-sm text-gray-300 space-y-1">
                 <p>• <strong>Router Address:</strong> {getContractAddress('ROUTER', DEFAULT_CHAIN_ID)}</p>
-                <p>• <strong>Network:</strong> {DEFAULT_CHAIN_ID === 3888 ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
+                <p>• <strong>Network:</strong> {DEFAULT_CHAIN_ID === CHAIN_IDS.KALYCHAIN ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
                 <p>• <strong>DEX:</strong> KalySwap Router</p>
                 <div className="mt-2 pt-2 border-t border-blue-500/20">
                   <p className="text-xs text-gray-400">

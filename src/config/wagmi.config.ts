@@ -1,19 +1,15 @@
+import { walletLogger } from '@/lib/logger';
 import { getDefaultConfig, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
 import { createConfig, http } from 'wagmi'
-import { kalychain, clisha, supportedChains } from './chains'
-import { arbitrum, bsc } from 'viem/chains'
+import { supportedChains, RPC_URLS, getRpcUrl } from './chains'
 import { kalyswapWallet } from './wallets'
 
 // Get project ID from environment variables
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id'
 
-// Chain-specific RPC configuration - using paid unlimited nodes
-export const chainRpcUrls = {
-  [kalychain.id]: process.env.NEXT_PUBLIC_KALYCHAIN_RPC_URL || 'https://rpc.kalychain.io/rpc',
-  [arbitrum.id]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arbitrum.nownodes.io/38c9312e-ab3b-43cc-9f00-da2b23125a28',
-  [bsc.id]: process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc.nownodes.io/38c9312e-ab3b-43cc-9f00-da2b23125a28',
-  [clisha.id]: process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
-} as const
+// Re-export RPC URLs for backward compatibility
+// NOTE: Prefer importing from '@/config/chains' directly
+export const chainRpcUrls = RPC_URLS;
 
 // Create wagmi config with internal wallet registered for auto-reconnection
 const createWagmiConfigWithInternalWallet = () => {
@@ -38,10 +34,9 @@ const createWagmiConfigWithInternalWallet = () => {
     projectId,
   })
 
-  // Create transports with explicit RPC URLs
+  // Create transports with explicit RPC URLs from centralized config
   const transports = supportedChains.reduce((acc, chain) => {
-    // Use explicit RPC URLs from chainRpcUrls to avoid default thirdweb RPCs
-    const rpcUrl = chainRpcUrls[chain.id as keyof typeof chainRpcUrls]
+    const rpcUrl = getRpcUrl(chain.id)
     acc[chain.id] = http(rpcUrl)
     return acc
   }, {} as Record<number, any>)
@@ -59,7 +54,7 @@ export const wagmiConfig = createWagmiConfigWithInternalWallet()
 
 // DEBUG: Log the configuration (only in development)
 if (process.env.NODE_ENV === 'development') {
-  console.log('Wagmi Config Created with custom connect button approach:', {
+  walletLogger.debug('Wagmi Config Created with custom connect button approach:', {
     chains: supportedChains.map(c => ({ id: c.id, name: c.name })),
     approach: 'Custom Connect Button with separate internal wallet handling'
   })

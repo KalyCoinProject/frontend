@@ -2,6 +2,7 @@
 // This file contains token configurations for bridge operations
 
 import { ChainMap } from '@hyperlane-xyz/sdk';
+import { CHAIN_IDS } from '@/config/chains';
 
 export interface BridgeToken {
   address: string;
@@ -23,7 +24,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'KLC',
       name: 'KalyCoin',
       decimals: 18,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/klc.png',
       standard: 'EvmHypNative',
     },
@@ -32,7 +33,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'USDT',
       name: 'Tether USD',
       decimals: 6,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/usdt.png',
       standard: 'EvmHypSynthetic',
     },
@@ -41,7 +42,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/usdc.png',
       standard: 'EvmHypSynthetic',
     },
@@ -50,7 +51,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'DAI',
       name: 'Dai Stablecoin',
       decimals: 18,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/dai.png',
       standard: 'EvmHypSynthetic',
     },
@@ -59,7 +60,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'ETH',
       name: 'Ether',
       decimals: 18,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/eth.png',
       standard: 'EvmHypSynthetic',
     },
@@ -68,7 +69,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'BNB',
       name: 'BNB',
       decimals: 18,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/bnb.png',
       standard: 'EvmHypSynthetic',
     },
@@ -77,7 +78,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'WBTC',
       name: 'Wrapped BTC',
       decimals: 8,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/tokens/wbtc.png',
       standard: 'EvmHypSynthetic',
     },
@@ -86,7 +87,7 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       symbol: 'CLISHA',
       name: 'Clisha Coin',
       decimals: 18,
-      chainId: 3888,
+      chainId: CHAIN_IDS.KALYCHAIN,
       logoURI: '/icons/clisha.png',
       standard: 'EvmHypSynthetic',
     },

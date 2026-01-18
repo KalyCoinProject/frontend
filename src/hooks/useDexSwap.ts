@@ -7,6 +7,7 @@ import { Token, QuoteResult, SwapParams } from '@/config/dex/types';
 import { DexService } from '@/services/dex/DexService';
 import { ERC20_ABI } from '@/config/abis';
 import { useState, useCallback } from 'react';
+import { swapLogger } from '@/lib/logger';
 
 interface UseDexSwapReturn {
   getQuote: (tokenIn: Token, tokenOut: Token, amountIn: string) => Promise<QuoteResult>;
@@ -161,7 +162,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
 
       return result.data.sendContractTransaction.hash;
     } catch (err: any) {
-      console.error('Internal wallet swap error:', err);
+      swapLogger.error('Internal wallet swap error:', err);
       throw err;
     }
   }, [chainId, publicClient]);
@@ -204,7 +205,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
 
       return allowance >= amountBigInt;
     } catch (err: any) {
-      console.error('Check approval error:', err);
+      swapLogger.error('Check approval error:', err);
       return false;
     }
   }, [publicClient, walletClient]);
@@ -238,24 +239,24 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
         ? parseUnits(amount, token.decimals)
         : maxUint256;
 
-      console.log(`Approving ${token.symbol} for ${spender}...`);
+      swapLogger.debug(`Approving ${token.symbol} for ${spender}...`);
 
       const txHash = await tokenContract.write.approve([
         spender as `0x${string}`,
         approvalAmount
       ]) as string;
 
-      console.log(`Approval transaction sent: ${txHash}`);
+      swapLogger.debug(`Approval transaction sent: ${txHash}`);
 
       // Wait for transaction confirmation
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-        console.log(`Approval confirmed: ${txHash}`);
+        swapLogger.debug(`Approval confirmed: ${txHash}`);
       }
 
       return txHash;
     } catch (err: any) {
-      console.error('Approve token error:', err);
+      swapLogger.error('Approve token error:', err);
       throw err;
     }
   }, [walletClient, publicClient]);
@@ -277,9 +278,9 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
         const isApproved = await checkApproval(params.tokenIn, params.amountIn, routerAddress);
 
         if (!isApproved) {
-          console.log(`Token not approved. Requesting approval for ${params.tokenIn.symbol}...`);
+          swapLogger.debug(`Token not approved. Requesting approval for ${params.tokenIn.symbol}...`);
           await approveToken(params.tokenIn, routerAddress);
-          console.log(`Approval successful for ${params.tokenIn.symbol}`);
+          swapLogger.debug(`Approval successful for ${params.tokenIn.symbol}`);
         }
       }
 
@@ -295,7 +296,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
       const txHash = await service.executeSwap(paramsWithRoute, walletClient);
       return txHash;
     } catch (err: any) {
-      console.error('External wallet swap error:', err);
+      swapLogger.error('External wallet swap error:', err);
       throw err;
     }
   }, [chainId, walletClient, publicClient, checkApproval, approveToken]);

@@ -1,5 +1,7 @@
 'use client';
 
+import { launchpadLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -176,7 +178,7 @@ export default function ConfirmedProjects() {
       setProjects(allProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch projects');
-      console.error('Error fetching confirmed projects:', err);
+      launchpadLogger.error('Error fetching confirmed projects:', err);
     } finally {
       setLoading(false);
     }

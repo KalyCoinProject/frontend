@@ -12,6 +12,8 @@ import { batchFarmingCalls, createMulticallService } from '@/utils/multicall'
 import { contractCache, CacheKeys } from '@/utils/contractCache'
 import stakingRewardsABI from '@/config/abis/dex/stakingRewardsABI.json'
 import { useFarmingSubgraph } from '@/hooks/useFarmingSubgraph'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 // Mock TokenAmount implementation (same as original)
 class MockTokenAmount {
@@ -23,7 +25,7 @@ class MockTokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(Math.min(digits, 6))
     } catch (error) {
-      console.error('Error in toSignificant:', error)
+      farmingLogger.error('Error in toSignificant:', error)
       return '0'
     }
   }
@@ -34,7 +36,7 @@ class MockTokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(digits)
     } catch (error) {
-      console.error('Error in toFixed:', error)
+      farmingLogger.error('Error in toFixed:', error)
       return '0'
     }
   }
@@ -44,7 +46,7 @@ class MockTokenAmount {
       const formatted = formatUnits(this.raw, this.token.decimals)
       return parseFloat(formatted)
     } catch (error) {
-      console.error('Error in toNumber:', error)
+      farmingLogger.error('Error in toNumber:', error)
       return 0
     }
   }
@@ -119,12 +121,12 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
       symbol: `${token0.symbol}-${token1.symbol}`,
       name: `${token0.name}-${token1.name} LP`,
       decimals: 18,
-      chainId: chainId || 3888
+      chainId: chainId || CHAIN_IDS.KALYCHAIN
     }
 
     const zeroAmount = new MockTokenAmount(lpToken, BigNumber.from(0))
     const zeroReward = new MockTokenAmount(
-      { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+      { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || CHAIN_IDS.KALYCHAIN } as Token,
       BigNumber.from(0)
     )
 
@@ -174,7 +176,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
       const earnedAmount = stakingResult?.[2] || BigNumber.from(0);
 
       if (!isWhitelisted) {
-        console.warn(`⚠️ Pool ${token0.symbol}-${token1.symbol} is not whitelisted`);
+        farmingLogger.warn(`⚠️ Pool ${token0.symbol}-${token1.symbol} is not whitelisted`);
         return createNAStakingInfo(pool, token0, token1, pairAddress);
       }
 
@@ -194,7 +196,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           stakedAmount
         ),
         earnedAmount: new MockTokenAmount(
-          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || CHAIN_IDS.KALYCHAIN } as Token,
           earnedAmount
         ),
         totalStakedAmount: new MockTokenAmount(
@@ -210,15 +212,15 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           totalStaked // Raw LP token amount - UI will format
         ),
         totalRewardRatePerSecond: new MockTokenAmount(
-          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || CHAIN_IDS.KALYCHAIN } as Token,
           rewardRate
         ),
         totalRewardRatePerWeek: new MockTokenAmount(
-          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || CHAIN_IDS.KALYCHAIN } as Token,
           rewardRate.mul(604800) // Convert per second to per week (60*60*24*7)
         ),
         rewardRatePerWeek: new MockTokenAmount(
-          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || CHAIN_IDS.KALYCHAIN } as Token,
           BigNumber.from(0) // User-specific reward rate
         ),
         periodFinish: new Date(periodFinish.toNumber() * 1000),
@@ -236,7 +238,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
 
       return stakingInfo;
     } catch (err) {
-      console.error('Error creating staking info from multicall:', err);
+      farmingLogger.error('Error creating staking info from multicall:', err);
       return createNAStakingInfo(pool, token0, token1, pairAddress);
     }
   }, [chainId, createNAStakingInfo])
@@ -247,7 +249,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
 
     if (!chainId) {
       if (canUseSubgraph) {
-        console.log('🚀 Using subgraph data without wallet connection for testing!')
+        farmingLogger.debug('🚀 Using subgraph data without wallet connection for testing!')
 
         // Convert subgraph data to the format expected by the UI
         const subgraphStakingInfos = farmingData.farmingPools.map((pool: any) => {
@@ -278,9 +280,9 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           if (matchingPool) {
             token0Symbol = matchingPool.tokens[0].symbol;
             token1Symbol = matchingPool.tokens[1].symbol;
-            console.log(`✅ Found pool config for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+            farmingLogger.debug(`✅ Found pool config for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
           } else {
-            console.warn(`⚠️ No pool configuration found for ${pairAddress}, using fallback mappings`);
+            farmingLogger.warn(`⚠️ No pool configuration found for ${pairAddress}, using fallback mappings`);
             // Fallback to hardcoded mappings for pools not in config
           if (pairAddress === '0x25fddaf836d12dc5e285823a644bb86e0b79c8e2') {
             token0Symbol = 'WKLC';
@@ -325,7 +327,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             symbol: `${token0Symbol}-${token1Symbol}`,
             name: `${token0Symbol}-${token1Symbol} LP`,
             decimals: 18,
-            chainId: 3888
+            chainId: CHAIN_IDS.KALYCHAIN
           };
 
           const rewardToken: Token = {
@@ -333,7 +335,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             symbol: 'KSWAP',
             name: 'KalySwap',
             decimals: 18,
-            chainId: 3888
+            chainId: CHAIN_IDS.KALYCHAIN
           };
 
           // Convert string values to BigNumber and create MockTokenAmount objects
@@ -346,15 +348,15 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           const rewardRatePerWeekWei = rewardRate.mul(secondsPerWeek);
 
           // Debug logging to see actual values
-          console.log(`🔍 Pool ${pool.address}: totalStaked=${pool.totalStaked}, rewardRate=${pool.rewardRate}, weight=${whitelistedPool?.weight}`);
-          console.log(`🎯 Token mapping for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+          farmingLogger.debug(`🔍 Pool ${pool.address}: totalStaked=${pool.totalStaked}, rewardRate=${pool.rewardRate}, weight=${whitelistedPool?.weight}`);
+          farmingLogger.debug(`🎯 Token mapping for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
 
           const token0: Token = {
             address: '0x0000000000000000000000000000000000000000',
             symbol: token0Symbol,
             name: token0Symbol,
             decimals: 18,
-            chainId: chainId || 3888
+            chainId: chainId || CHAIN_IDS.KALYCHAIN
           };
 
           const token1: Token = {
@@ -362,11 +364,11 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             symbol: token1Symbol,
             name: token1Symbol,
             decimals: 18,
-            chainId: chainId || 3888
+            chainId: chainId || CHAIN_IDS.KALYCHAIN
           };
 
           // Debug the calculation
-          console.log(`🧮 Reward calculation: rewardRate=${rewardRate.toString()}, rewardRatePerWeekWei=${rewardRatePerWeekWei.toString()}`);
+          farmingLogger.debug(`🧮 Reward calculation: rewardRate=${rewardRate.toString()}, rewardRatePerWeekWei=${rewardRatePerWeekWei.toString()}`);
 
           // userFarm is already declared above at line 235
 
@@ -406,11 +408,11 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
 
         setStakingInfos(subgraphStakingInfos);
         setIsLoading(false);
-        console.log(`✅ Loaded ${subgraphStakingInfos.length} farms from subgraph without wallet!`);
+        farmingLogger.debug(`✅ Loaded ${subgraphStakingInfos.length} farms from subgraph without wallet!`);
         return;
       }
 
-      console.log('⏸️ ChainId not available, skipping fetch')
+      farmingLogger.debug('⏸️ ChainId not available, skipping fetch')
       return
     }
 
@@ -423,14 +425,14 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
       if (useSubgraph) {
         // If subgraph is still loading, wait for it
         if (subgraphLoading) {
-          console.log('⏳ Waiting for subgraph to load...');
+          farmingLogger.debug('⏳ Waiting for subgraph to load...');
           setIsLoading(true);
           return;
         }
 
         // If subgraph has data, use the same logic as the no-wallet case above
         if (!subgraphError && farmingData.farmingPools.length > 0) {
-          console.log('🚀 Using subgraph data for farming with wallet connected!', {
+          farmingLogger.debug('🚀 Using subgraph data for farming with wallet connected!', {
             farmingPoolsCount: farmingData.farmingPools.length,
             whitelistedPoolsCount: farmingData.whitelistedPools.length
           });
@@ -460,9 +462,9 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             if (matchingPool) {
               token0Symbol = matchingPool.tokens[0].symbol;
               token1Symbol = matchingPool.tokens[1].symbol;
-              console.log(`✅ Found pool config for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+              farmingLogger.debug(`✅ Found pool config for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
             } else {
-              console.warn(`⚠️ No pool configuration found for ${pairAddress}, using fallback mappings`);
+              farmingLogger.warn(`⚠️ No pool configuration found for ${pairAddress}, using fallback mappings`);
               // Fallback to hardcoded mappings for pools not in config
               if (pairAddress === '0x25fddaf836d12dc5e285823a644bb86e0b79c8e2') {
                 token0Symbol = 'WKLC';
@@ -482,7 +484,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: token0Symbol,
               name: token0Symbol,
               decimals: 18,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             const token1: Token = {
@@ -490,7 +492,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: token1Symbol,
               name: token1Symbol,
               decimals: 18,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             // Create LP token
@@ -499,7 +501,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: `${token0Symbol}-${token1Symbol}`,
               name: `${token0Symbol}-${token1Symbol} LP`,
               decimals: 18,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             // Create reward token (KSWAP)
@@ -508,7 +510,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: 'KSWAP',
               name: 'KalySwap',
               decimals: 18,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             // Convert string values to BigNumber and create MockTokenAmount objects
@@ -521,8 +523,8 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             const rewardRatePerWeekWei = rewardRate.mul(secondsPerWeek);
 
             // Debug logging to see actual values
-            console.log(`🔍 Pool ${pool.address}: totalStaked=${pool.totalStaked}, rewardRate=${pool.rewardRate}, weight=${whitelistedPool?.weight}`);
-            console.log(`🎯 Token mapping for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+            farmingLogger.debug(`🔍 Pool ${pool.address}: totalStaked=${pool.totalStaked}, rewardRate=${pool.rewardRate}, weight=${whitelistedPool?.weight}`);
+            farmingLogger.debug(`🎯 Token mapping for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
 
             // User amounts (from userFarm if available)
             const userStakedAmount = BigNumber.from(userFarm?.stakedAmount || '0');
@@ -556,30 +558,30 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           setStakingInfos(subgraphStakingInfos);
           setIsLoading(false);
           hasInitiallyLoaded.current = true;
-          console.log(`✅ Loaded ${subgraphStakingInfos.length} farms from subgraph with wallet connected!`);
+          farmingLogger.debug(`✅ Loaded ${subgraphStakingInfos.length} farms from subgraph with wallet connected!`);
           return;
         }
 
         // If subgraph failed or has no data, log and fallback
         if (subgraphError) {
-          console.log('⚠️ Subgraph error, falling back to multicall:', subgraphError);
+          farmingLogger.debug('⚠️ Subgraph error, falling back to multicall:', subgraphError);
         } else {
-          console.log('⚠️ Subgraph has no farming pools, falling back to multicall');
+          farmingLogger.debug('⚠️ Subgraph has no farming pools, falling back to multicall');
         }
       }
 
       // Fallback to multicall if subgraph is disabled or failed
-      console.log('📞 Using multicall for farming data (subgraph not enabled or unavailable)...');
+      farmingLogger.debug('📞 Using multicall for farming data (subgraph not enabled or unavailable)...');
 
-      console.log('🚀 Starting optimized farm data fetch with multicall (including whitelisting)...')
+      farmingLogger.debug('🚀 Starting optimized farm data fetch with multicall (including whitelisting)...')
       const startTime = Date.now()
 
       // Check cache first - use stable cache key for general farm data
-      const cacheKey = CacheKeys.farmingData(chainId || 3888)
+      const cacheKey = CacheKeys.farmingData(chainId || CHAIN_IDS.KALYCHAIN)
       const cachedData = contractCache.get<DoubleSideStakingInfo[]>(cacheKey)
       
       if (cachedData) {
-        console.log('📦 Using cached farming data')
+        farmingLogger.debug('📦 Using cached farming data')
         setStakingInfos(cachedData)
         hasInitiallyLoaded.current = true
         setIsLoading(false)
@@ -605,8 +607,8 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           }
         })
 
-        console.log('📡 Executing multicall for all farms (including whitelisting checks)...')
-        console.log('🔍 Checking whitelisting for pair addresses:', poolPairAddresses)
+        farmingLogger.debug('📡 Executing multicall for all farms (including whitelisting checks)...')
+        farmingLogger.debug('🔍 Checking whitelisting for pair addresses:', poolPairAddresses)
 
         const liquidityManagerContract = getLiquidityPoolManagerContract()
         if (!liquidityManagerContract) {
@@ -627,7 +629,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           address
         )
 
-        console.log('✅ Multicall successful, got', liquidityManagerResults.length + stakingResults.length, 'results')
+        farmingLogger.debug('✅ Multicall successful, got', liquidityManagerResults.length + stakingResults.length, 'results')
 
         // Process results
         const stakingInfoPromises = farmingPools.map(async (pool, poolIndex) => {
@@ -637,7 +639,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: pool.tokens[0].symbol,
               name: pool.tokens[0].name,
               decimals: pool.tokens[0].decimals,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             const token1: Token = {
@@ -645,21 +647,21 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               symbol: pool.tokens[1].symbol,
               name: pool.tokens[1].name,
               decimals: pool.tokens[1].decimals,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             };
 
             const poolKey = `${token0.symbol}_${token1.symbol}`;
             const pairAddress = pairAddresses[poolKey] || pool.pairAddress;
 
             if (!pairAddress || pairAddress === 'N/A') {
-              console.warn(`⚠️ No pair address found for ${poolKey}, creating N/A info`);
+              farmingLogger.warn(`⚠️ No pair address found for ${poolKey}, creating N/A info`);
               return createNAStakingInfo(pool, token0, token1, 'N/A');
             }
 
             // Get multicall results for this pool
             const mapping = poolPairMapping[poolIndex];
             if (!mapping) {
-              console.warn(`⚠️ No multicall mapping found for ${poolKey}`);
+              farmingLogger.warn(`⚠️ No multicall mapping found for ${poolKey}`);
               return createNAStakingInfo(pool, token0, token1, pairAddress);
             }
 
@@ -667,7 +669,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             const baseIndex = mapping.resultIndex * 3; // 3 calls per pool for LiquidityManager
             const stakingIndex = mapping.resultIndex; // 1 call per pool for StakingRewards
 
-            console.log(`🔍 Pool ${poolKey} multicall results:`, {
+            farmingLogger.debug(`🔍 Pool ${poolKey} multicall results:`, {
               poolIndex,
               resultIndex: mapping.resultIndex,
               baseIndex,
@@ -690,7 +692,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               getPoolAPR
             );
           } catch (err) {
-            console.error(`❌ Error processing pool ${pool.tokens[0].symbol}-${pool.tokens[1].symbol}:`, err);
+            farmingLogger.error(`❌ Error processing pool ${pool.tokens[0].symbol}-${pool.tokens[1].symbol}:`, err);
             return createNAStakingInfo(pool, pool.tokens[0], pool.tokens[1], 'N/A');
           }
         });
@@ -698,20 +700,20 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
         const results = await Promise.all(stakingInfoPromises)
         const validResults = results.filter((result): result is DoubleSideStakingInfo => result !== null)
 
-        console.log(`✅ Multicall completed: ${validResults.length} farms processed in ${Date.now() - startTime}ms`)
+        farmingLogger.debug(`✅ Multicall completed: ${validResults.length} farms processed in ${Date.now() - startTime}ms`)
         contractCache.set(cacheKey, validResults, { ttl: 45 * 1000 })
         setStakingInfos(validResults)
         hasInitiallyLoaded.current = true
         return
       } catch (err) {
-        console.error('❌ Error fetching farming data:', err)
+        farmingLogger.error('❌ Error fetching farming data:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch staking data')
       } finally {
         setIsLoading(false)
         setIsFetching(false)
       }
     } catch (err) {
-      console.error('❌ Error in fetchStakingDataOptimized:', err)
+      farmingLogger.error('❌ Error in fetchStakingDataOptimized:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch staking data')
       setIsLoading(false)
       setIsFetching(false)
@@ -723,9 +725,9 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
   }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, useSubgraph, farmingData, subgraphLoading])
 
   const refetch = useCallback(() => {
-    console.log('🔄 Refetching farm data (clearing cache)...')
+    farmingLogger.debug('🔄 Refetching farm data (clearing cache)...')
     // Clear cache and trigger refresh - use stable cache key
-    const cacheKey = CacheKeys.farmingData(chainId || 3888)
+    const cacheKey = CacheKeys.farmingData(chainId || CHAIN_IDS.KALYCHAIN)
     contractCache.delete(cacheKey)
     setError(null)
     setRefreshTrigger(prev => prev + 1)

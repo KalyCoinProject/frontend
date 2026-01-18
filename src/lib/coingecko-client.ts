@@ -1,3 +1,4 @@
+import { subgraphLogger } from '@/lib/logger';
 import { Token } from '@/config/dex/types';
 
 // CoinGecko API configuration
@@ -20,7 +21,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
   
   // Return cached data if still valid
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('🎯 CoinGecko cache hit:', url);
+    subgraphLogger.debug('🎯 CoinGecko cache hit:', url);
     return cached.data;
   }
 
@@ -29,12 +30,12 @@ async function rateLimitedFetch(url: string): Promise<any> {
   const timeSinceLastRequest = now - lastRequestTime;
   if (timeSinceLastRequest < RATE_LIMIT_DELAY) {
     const delay = RATE_LIMIT_DELAY - timeSinceLastRequest;
-    console.log(`⏳ CoinGecko rate limit delay: ${delay}ms`);
+    subgraphLogger.debug(`⏳ CoinGecko rate limit delay: ${delay}ms`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
   try {
-    console.log('🌐 CoinGecko API call:', url);
+    subgraphLogger.debug('🌐 CoinGecko API call:', url);
     lastRequestTime = Date.now();
     
     const response = await fetch(url);
@@ -49,7 +50,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
     
     return data;
   } catch (error) {
-    console.error('❌ CoinGecko API error:', error);
+    subgraphLogger.error('❌ CoinGecko API error:', error);
     throw error;
   }
 }
@@ -113,20 +114,20 @@ const TOKEN_TO_COINGECKO_ID: Record<string, Record<string, string>> = {
 function getTokenCoinGeckoId(token: Token): string | null {
   // First priority: use coingeckoId from token (from CoinGecko exchange API)
   if ('coingeckoId' in token && token.coingeckoId) {
-    console.log(`🎯 Using token coingeckoId: ${token.symbol} -> ${token.coingeckoId}`);
+    subgraphLogger.debug(`🎯 Using token coingeckoId: ${token.symbol} -> ${token.coingeckoId}`);
     return token.coingeckoId;
   }
 
   // Fallback: use hardcoded mapping
   const chainMapping = TOKEN_TO_COINGECKO_ID[token.chainId.toString()];
   if (!chainMapping) {
-    console.warn(`⚠️ No CoinGecko mapping for chain ${token.chainId}`);
+    subgraphLogger.warn(`⚠️ No CoinGecko mapping for chain ${token.chainId}`);
     return null;
   }
 
   const coinId = chainMapping[token.symbol];
   if (!coinId) {
-    console.warn(`⚠️ No CoinGecko ID for token ${token.symbol} on chain ${token.chainId}`);
+    subgraphLogger.warn(`⚠️ No CoinGecko ID for token ${token.symbol} on chain ${token.chainId}`);
     return null;
   }
 
@@ -169,7 +170,7 @@ export async function getCoinGeckoOHLC(
   try {
     const pairIds = getPairCoinGeckoIds(tokenA, tokenB);
     if (!pairIds) {
-      console.warn(`⚠️ Cannot get CoinGecko IDs for pair ${tokenA.symbol}/${tokenB.symbol}`);
+      subgraphLogger.warn(`⚠️ Cannot get CoinGecko IDs for pair ${tokenA.symbol}/${tokenB.symbol}`);
       return [];
     }
 
@@ -177,11 +178,11 @@ export async function getCoinGeckoOHLC(
     const data = await rateLimitedFetch(url);
 
     if (!Array.isArray(data)) {
-      console.warn('⚠️ CoinGecko OHLC data is not an array:', data);
+      subgraphLogger.warn('⚠️ CoinGecko OHLC data is not an array:', data);
       return [];
     }
 
-    console.log(`✅ CoinGecko OHLC data fetched for ${tokenA.symbol}/${tokenB.symbol}:`, {
+    subgraphLogger.debug(`✅ CoinGecko OHLC data fetched for ${tokenA.symbol}/${tokenB.symbol}:`, {
       baseToken: pairIds.baseId,
       dataPoints: data.length,
       days
@@ -189,7 +190,7 @@ export async function getCoinGeckoOHLC(
 
     return data;
   } catch (error) {
-    console.error(`❌ Error fetching CoinGecko OHLC for ${tokenA.symbol}/${tokenB.symbol}:`, error);
+    subgraphLogger.error(`❌ Error fetching CoinGecko OHLC for ${tokenA.symbol}/${tokenB.symbol}:`, error);
     return [];
   }
 }
@@ -236,7 +237,7 @@ export async function getCoinGeckoPrice(token: Token): Promise<number | null> {
     const price = data[coinId]?.usd;
     return price ? parseFloat(price.toString()) : null;
   } catch (error) {
-    console.error(`❌ Error fetching CoinGecko price for ${token.symbol}:`, error);
+    subgraphLogger.error(`❌ Error fetching CoinGecko price for ${token.symbol}:`, error);
     return null;
   }
 }

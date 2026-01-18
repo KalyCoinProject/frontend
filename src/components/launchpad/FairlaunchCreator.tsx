@@ -1,5 +1,9 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
+import { launchpadLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -294,9 +298,9 @@ export default function FairlaunchCreator() {
       try {
         const parsedDraft = JSON.parse(savedDraft);
         setFormData(parsedDraft);
-        console.log('📝 Loaded fairlaunch draft data from localStorage');
+        launchpadLogger.debug('📝 Loaded fairlaunch draft data from localStorage');
       } catch (error) {
-        console.error('Error loading fairlaunch draft data:', error);
+        launchpadLogger.error('Error loading fairlaunch draft data:', error);
         localStorage.removeItem(FAIRLAUNCH_DRAFT_KEY);
       }
     }
@@ -511,10 +515,10 @@ export default function FairlaunchCreator() {
       // Clear draft data from localStorage after successful save
       localStorage.removeItem(FAIRLAUNCH_DRAFT_KEY);
 
-      console.log('✅ Fairlaunch project saved to database:', savedProject);
+      launchpadLogger.debug('✅ Fairlaunch project saved to database:', savedProject);
       return savedProject;
     } catch (error) {
-      console.error('❌ Error saving fairlaunch project to database:', error);
+      launchpadLogger.error('❌ Error saving fairlaunch project to database:', error);
       throw error;
     } finally {
       setIsSavingToDatabase(false);
@@ -615,15 +619,15 @@ export default function FairlaunchCreator() {
       setError(null);
       setCurrentStep('idle');
 
-      console.log('🚀 Starting fairlaunch creation process...');
+      launchpadLogger.debug('🚀 Starting fairlaunch creation process...');
 
       // Step 1: Get token information
-      console.log('📋 Getting token information...');
+      launchpadLogger.debug('📋 Getting token information...');
       const tokenInfo = await getTokenInfo(formData.saleToken);
       setTokenDecimals(tokenInfo.decimals);
       setTokenSymbol(tokenInfo.symbol);
 
-      console.log(`Token: ${tokenInfo.symbol}, Decimals: ${tokenInfo.decimals}`);
+      launchpadLogger.debug(`Token: ${tokenInfo.symbol}, Decimals: ${tokenInfo.decimals}`);
 
       // Step 2: Calculate required token amounts with proper decimals
       const sellingAmountWithDecimals = parseUnits(formData.sellingAmount, tokenInfo.decimals);
@@ -631,9 +635,9 @@ export default function FairlaunchCreator() {
       const liquidityAmount = (sellingAmountWithDecimals * liquidityPercent) / BigInt(100);
       const requiredTokens = sellingAmountWithDecimals + liquidityAmount;
 
-      console.log(`Required tokens: ${formatUnits(requiredTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
-      console.log(`- Selling: ${formatUnits(sellingAmountWithDecimals, tokenInfo.decimals)} ${tokenInfo.symbol}`);
-      console.log(`- Liquidity: ${formatUnits(liquidityAmount, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`Required tokens: ${formatUnits(requiredTokens, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`- Selling: ${formatUnits(sellingAmountWithDecimals, tokenInfo.decimals)} ${tokenInfo.symbol}`);
+      launchpadLogger.debug(`- Liquidity: ${formatUnits(liquidityAmount, tokenInfo.decimals)} ${tokenInfo.symbol}`);
 
       const factoryAddress = getFairlaunchFactoryAddress();
 
@@ -641,22 +645,22 @@ export default function FairlaunchCreator() {
       setCurrentStep('approving');
       setIsApproving(true);
 
-      console.log('🔍 Checking token allowance...');
+      launchpadLogger.debug('🔍 Checking token allowance...');
       const currentAllowance = await checkTokenAllowance(formData.saleToken, factoryAddress);
 
       if (currentAllowance < requiredTokens) {
-        console.log(`💰 Approving ${formatUnits(requiredTokens, tokenInfo.decimals)} ${tokenInfo.symbol}...`);
+        launchpadLogger.debug(`💰 Approving ${formatUnits(requiredTokens, tokenInfo.decimals)} ${tokenInfo.symbol}...`);
         await approveTokens(formData.saleToken, factoryAddress, requiredTokens);
-        console.log('✅ Token approval confirmed');
+        launchpadLogger.debug('✅ Token approval confirmed');
       } else {
-        console.log('✅ Sufficient token allowance already exists');
+        launchpadLogger.debug('✅ Sufficient token allowance already exists');
       }
 
       setIsApproving(false);
 
       // Step 4: Create fairlaunch
       setCurrentStep('creating');
-      console.log('🏗️ Creating fairlaunch contract...');
+      launchpadLogger.debug('🏗️ Creating fairlaunch contract...');
 
       const contractParams = formatFairlaunchContractParams();
       const creationFee = parseEther(getCreationFee());
@@ -765,11 +769,11 @@ export default function FairlaunchCreator() {
         });
       }
 
-      console.log(`📝 Transaction hash: ${hash}`);
-      console.log('⏳ Waiting for transaction confirmation...');
+      launchpadLogger.debug(`📝 Transaction hash: ${hash}`);
+      launchpadLogger.debug('⏳ Waiting for transaction confirmation...');
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      launchpadLogger.debug(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
 
       // Step 5: Parse fairlaunch address from events
       let fairlaunchAddress: string | null = null;
@@ -790,13 +794,13 @@ export default function FairlaunchCreator() {
               const addressHex = log.topics[2];
               if (addressHex && addressHex.length >= 42) {
                 fairlaunchAddress = `0x${addressHex.slice(-40)}`;
-                console.log(`Found fairlaunch address from event: ${fairlaunchAddress}`);
+                launchpadLogger.debug(`Found fairlaunch address from event: ${fairlaunchAddress}`);
                 break;
               }
             }
           }
         } catch (error) {
-          console.warn('Error parsing log:', error);
+          launchpadLogger.warn('Error parsing log:', error);
         }
       }
 
@@ -804,14 +808,14 @@ export default function FairlaunchCreator() {
         throw new Error('Could not determine fairlaunch address from transaction logs');
       }
 
-      console.log(`🎉 Fairlaunch created at: ${fairlaunchAddress}`);
+      launchpadLogger.debug(`🎉 Fairlaunch created at: ${fairlaunchAddress}`);
       setCreatedFairlaunch(fairlaunchAddress);
 
       // Step 6: Set router address
       setCurrentStep('setting-router');
       setIsSettingRouter(true);
 
-      console.log('🔧 Setting router address...');
+      launchpadLogger.debug('🔧 Setting router address...');
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
 
       let setRouterHash: `0x${string}`;
@@ -840,21 +844,21 @@ export default function FairlaunchCreator() {
       }
 
       await publicClient.waitForTransactionReceipt({ hash: setRouterHash });
-      console.log('✅ Router address set successfully');
+      launchpadLogger.debug('✅ Router address set successfully');
       setIsSettingRouter(false);
 
       // Step 7: Save to database
       setCurrentStep('saving');
-      console.log('💾 Saving fairlaunch project to database...');
+      launchpadLogger.debug('💾 Saving fairlaunch project to database...');
       try {
         const savedProject = await saveFairlaunchToDatabase(
           fairlaunchAddress,
           hash,
           Number(receipt.blockNumber)
         );
-        console.log('✅ Fairlaunch project successfully saved to database:', savedProject.id);
+        launchpadLogger.debug('✅ Fairlaunch project successfully saved to database:', savedProject.id);
       } catch (dbError) {
-        console.error('❌ Failed to save to database, but blockchain transaction succeeded:', dbError);
+        launchpadLogger.error('❌ Failed to save to database, but blockchain transaction succeeded:', dbError);
         setError(`Fairlaunch created successfully, but failed to save project details: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
       }
 
@@ -883,7 +887,7 @@ export default function FairlaunchCreator() {
       });
 
     } catch (err) {
-      console.error('❌ Error creating fairlaunch:', err);
+      launchpadLogger.error('❌ Error creating fairlaunch:', err);
       setError(err instanceof Error ? err.message : 'Failed to create fairlaunch');
       setCurrentStep('idle');
     } finally {
@@ -1366,7 +1370,7 @@ export default function FairlaunchCreator() {
               <h4 className="font-medium text-white mb-1">DEX Router Configuration</h4>
               <div className="text-sm text-gray-300 space-y-1">
                 <p>• <strong>Router Address:</strong> {getContractAddress('ROUTER', DEFAULT_CHAIN_ID)}</p>
-                <p>• <strong>Network:</strong> {DEFAULT_CHAIN_ID === 3888 ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
+                <p>• <strong>Network:</strong> {DEFAULT_CHAIN_ID === CHAIN_IDS.KALYCHAIN ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
                 <p>• <strong>DEX:</strong> KalySwap Router</p>
                 <div className="mt-2 pt-2 border-t border-blue-500/20">
                   <p className="text-xs text-gray-400">

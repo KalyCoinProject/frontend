@@ -1,3 +1,4 @@
+import { swapLogger } from '@/lib/logger';
 import { useState, useEffect } from 'react';
 import { decodeAbiParameters, parseAbiParameters } from 'viem';
 
@@ -133,7 +134,7 @@ const decodeSwapInput = (input: string, methodId: string): { token0: string; tok
       }
     }
   } catch (error) {
-    console.warn('Failed to decode swap input:', error);
+    swapLogger.warn('Failed to decode swap input:', error);
   }
   return null;
 };
@@ -151,14 +152,14 @@ export function useExplorerTransactions({
     setError(null);
 
     try {
-      console.log('Fetching transactions from KalyScan API...');
+      swapLogger.debug('Fetching transactions from KalyScan API...');
 
       // If userAddress is provided, fetch transactions for that specific address
       // Otherwise, fetch router transactions for general trading activity
       const targetAddress = userAddress || ROUTER_ADDRESS;
       const apiUrl = `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions?limit=${limit}`;
 
-      console.log('KalyScan API URL:', apiUrl);
+      swapLogger.debug('KalyScan API URL:', apiUrl);
 
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
@@ -176,7 +177,7 @@ export function useExplorerTransactions({
       if (!response.ok) {
         // If it's a 422 or other client error, try without any query parameters
         if (response.status === 422 && apiUrl.includes('?')) {
-          console.log(`KalyScan API returned ${response.status} with query parameters, retrying without parameters...`);
+          swapLogger.debug(`KalyScan API returned ${response.status} with query parameters, retrying without parameters...`);
           const baseUrl = `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions`;
           const retryResponse = await fetch(baseUrl, {
             headers: {
@@ -186,7 +187,7 @@ export function useExplorerTransactions({
 
           if (retryResponse.ok) {
             const retryData: KalyScanResponse = await retryResponse.json();
-            console.log(`✅ Retry successful: Fetched ${retryData.items.length} transactions from KalyScan`);
+            swapLogger.debug(`✅ Retry successful: Fetched ${retryData.items.length} transactions from KalyScan`);
 
             // Transform and return the retry data
             const transformedTransactions: ExplorerTransaction[] = retryData.items
@@ -214,14 +215,14 @@ export function useExplorerTransactions({
               : transformedTransactions;
 
             setTransactions(filteredTransactions);
-            console.log(`Processed ${filteredTransactions.length} transactions (retry)`);
+            swapLogger.debug(`Processed ${filteredTransactions.length} transactions (retry)`);
             return; // Exit successfully
           }
         }
 
         // Only log detailed error if retry also failed
         const errorText = await response.text().catch(() => 'Unknown error');
-        console.error('KalyScan API error details:', {
+        swapLogger.error('KalyScan API error details:', {
           status: response.status,
           statusText: response.statusText,
           url: apiUrl,
@@ -233,7 +234,7 @@ export function useExplorerTransactions({
       }
 
       const data: KalyScanResponse = await response.json();
-      console.log(`Fetched ${data.items.length} transactions from KalyScan for ${targetAddress}`);
+      swapLogger.debug(`Fetched ${data.items.length} transactions from KalyScan for ${targetAddress}`);
 
       // Transform KalyScan data to our format
       const transformedTransactions: ExplorerTransaction[] = data.items
@@ -262,10 +263,10 @@ export function useExplorerTransactions({
         : transformedTransactions;
 
       setTransactions(filteredTransactions);
-      console.log(`Processed ${filteredTransactions.length} transactions`);
+      swapLogger.debug(`Processed ${filteredTransactions.length} transactions`);
 
     } catch (err) {
-      console.error('Error fetching explorer transactions:', err);
+      swapLogger.error('Error fetching explorer transactions:', err);
 
       // Handle different types of errors
       let errorMessage = 'Failed to fetch transactions';
@@ -279,7 +280,7 @@ export function useExplorerTransactions({
         }
       }
 
-      console.warn(`KalyScan API unavailable: ${errorMessage}, showing empty transaction list`);
+      swapLogger.warn(`KalyScan API unavailable: ${errorMessage}, showing empty transaction list`);
       setError(null); // Don't show error to user, just log it
       setTransactions([]); // Show empty list instead of error
     } finally {

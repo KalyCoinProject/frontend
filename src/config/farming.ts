@@ -1,3 +1,4 @@
+import { CHAIN_IDS } from '@/config/chains';
 import { DoubleSideStaking, SingleSideStaking, FarmingConfig, Token } from '@/types/farming'
 
 // KalyChain token addresses
@@ -7,69 +8,69 @@ const KALYCHAIN_TOKENS = {
     symbol: 'WKLC',
     name: 'Wrapped KLC',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   KSWAP: {
     address: '0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a',
     symbol: 'KSWAP',
     name: 'KalySwap Token',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   USDT: {
     address: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A',
     symbol: 'USDT',
     name: 'Tether USD',
     decimals: 6,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   USDC: {
     address: '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   WBTC: {
     address: '0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455',
     symbol: 'WBTC',
     name: 'Wrapped Bitcoin',
     decimals: 8,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   ETH: {
     address: '0xfdbB253753dDE60b11211B169dC872AaE672879b',
     symbol: 'ETH',
     name: 'Ethereum',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   DAI: {
     address: '0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6',
     symbol: 'DAI',
     name: 'Dai Stablecoin',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   POL: {
     address: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
     symbol: 'POL',
     name: 'Polygon',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token,
   BNB: {
     address: '0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb',
     symbol: 'BNB',
     name: 'Binance Coin',
     decimals: 18,
-    chainId: 3888
+    chainId: CHAIN_IDS.KALYCHAIN
   } as Token
 }
 
 // MiniChef V2 contract addresses
 const MINICHEF_ADDRESS: { [chainId: number]: string } = {
-  3888: '0x1f806f7C8dED893fd3caE279191ad7Aa3798E928' // KalyChain MiniChef V2
+  [CHAIN_IDS.KALYCHAIN]: '0x1f806f7C8dED893fd3caE279191ad7Aa3798E928' // KalyChain MiniChef V2
 }
 
 // LiquidityPoolManagerV2 contract address
@@ -179,10 +180,10 @@ export const FARMING_CONFIG: FarmingConfig = {
   LIQUIDITY_POOL_MANAGER_V2_ADDRESS,
   TREASURY_VESTER_ADDRESS,
   DOUBLE_SIDE_STAKING_REWARDS_INFO: {
-    3888: [DOUBLE_SIDE_STAKING_V0, DOUBLE_SIDE_STAKING_V1, DOUBLE_SIDE_STAKING_V2] // KalyChain
+    [CHAIN_IDS.KALYCHAIN]: [DOUBLE_SIDE_STAKING_V0, DOUBLE_SIDE_STAKING_V1, DOUBLE_SIDE_STAKING_V2] // KalyChain
   },
   SINGLE_SIDE_STAKING_REWARDS_INFO: {
-    3888: [SINGLE_SIDE_STAKING_V0] // KalyChain
+    [CHAIN_IDS.KALYCHAIN]: [SINGLE_SIDE_STAKING_V0] // KalyChain
   }
 }
 

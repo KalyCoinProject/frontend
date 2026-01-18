@@ -100,7 +100,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                 <h3 className="font-semibold text-white">Error Loading Pools</h3>
                 <p className="text-sm text-gray-300 mt-1">{error}</p>
                 <Button
-                  onClick={refetch}
+                  onClick={() => refetch()}
                   variant="outline"
                   size="sm"
                   className="mt-3 bg-gray-900/30 text-red-400 hover:bg-red-900/30 border-red-500/30"
@@ -128,7 +128,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
           </p>
         </div>
         <Button
-          onClick={refetch}
+          onClick={() => refetch()}
           variant="outline"
           size="sm"
           disabled={loading}

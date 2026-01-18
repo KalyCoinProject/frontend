@@ -1,5 +1,7 @@
 'use client';
 
+import { logger } from '@/lib/logger';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -152,7 +154,7 @@ export default function SignupPage() {
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
-      console.error('Signup error:', err);
+      logger.error('Signup error:', err);
     } finally {
       setLoading(false);
     }

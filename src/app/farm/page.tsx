@@ -12,6 +12,7 @@ import { Search, ChevronDown, ChevronUp, Zap, TrendingUp, ArrowLeft } from 'luci
 import { useRouter } from 'next/navigation'
 import { useWallet } from '@/hooks/useWallet'
 import { useFarmingDataOptimized } from '@/hooks/farming/useFarmingDataOptimized'
+import { farmingLogger } from '@/lib/logger'
 
 import FarmCard from '@/components/farming/FarmCard'
 import { formatNumber } from '@/lib/utils'
@@ -29,7 +30,7 @@ export default function FarmPage() {
 
 
   // Debug logging
-  console.log('🚜 Farm page data:', {
+  farmingLogger.debug('🚜 Farm page data:', {
     stakingInfos: stakingInfos?.length || 0,
     isLoading: stakingLoading,
     stakingInfosData: stakingInfos,

@@ -8,6 +8,8 @@ import liquidityPoolManagerV2ABI from '@/config/abis/dex/liqudityPoolManagerV2AB
 import treasuryVesterABI from '@/config/abis/dex/treasuryVesterABI.json'
 import stakingRewardsABI from '@/config/abis/dex/stakingRewardsABI.json'
 import { ContractEncoder, estimateContractGas, getCurrentGasPrice } from '@/utils/contractEncoder'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 interface StakingContractData {
   stakedAmount: BigNumber
@@ -198,11 +200,11 @@ export function useFarmingContracts() {
       const contract = getLiquidityPoolManagerContract()
       if (!contract) return []
 
-      console.log('🔍 Fetching whitelisted pools from LiquidityPoolManagerV2...')
+      farmingLogger.debug('🔍 Fetching whitelisted pools from LiquidityPoolManagerV2...')
 
       // Get number of pools first
       const numPools = await contract.numPools()
-      console.log(`📊 Total pools in contract: ${numPools.toString()}`)
+      farmingLogger.debug(`📊 Total pools in contract: ${numPools.toString()}`)
 
       const pools: WhitelistedPool[] = []
 
@@ -214,13 +216,13 @@ export function useFarmingContracts() {
         .map(pool => pool.pairAddress)
         .filter((address): address is string => address !== undefined) // Remove undefined addresses with type guard
 
-      console.log('🔍 Checking known pair addresses:', knownPairAddresses)
+      farmingLogger.debug('🔍 Checking known pair addresses:', knownPairAddresses)
 
       // Also try to get pair addresses dynamically from factory for pools without hardcoded addresses
       const poolsWithoutAddresses = Object.values(LP_FARMING_POOLS)
         .filter(pool => !pool.pairAddress)
 
-      console.log(`🔍 Found ${poolsWithoutAddresses.length} pools without hardcoded addresses`)
+      farmingLogger.debug(`🔍 Found ${poolsWithoutAddresses.length} pools without hardcoded addresses`)
 
       // For now, let's focus on the known pair address and add more discovery later
       const allPairAddresses = [...knownPairAddresses]
@@ -228,15 +230,15 @@ export function useFarmingContracts() {
       // Check each known pair
       for (const pairAddress of allPairAddresses) {
         try {
-          console.log(`🔍 Checking pair: ${pairAddress}`)
+          farmingLogger.debug(`🔍 Checking pair: ${pairAddress}`)
 
           const [isWhitelisted, weight] = await Promise.all([
             contract.isWhitelisted(pairAddress),
             contract.weights(pairAddress)
           ])
 
-          console.log(`  - Whitelisted: ${isWhitelisted}`)
-          console.log(`  - Weight: ${weight.toString()}`)
+          farmingLogger.debug(`  - Whitelisted: ${isWhitelisted}`)
+          farmingLogger.debug(`  - Weight: ${weight.toString()}`)
 
           if (isWhitelisted) {
             pools.push({
@@ -244,19 +246,19 @@ export function useFarmingContracts() {
               weight,
               isActive: weight.gt(0)
             })
-            console.log(`  ✅ Added to whitelisted pools`)
+            farmingLogger.debug(`  ✅ Added to whitelisted pools`)
           } else {
-            console.log(`  ❌ Not whitelisted`)
+            farmingLogger.debug(`  ❌ Not whitelisted`)
           }
         } catch (pairError) {
-          console.warn(`❌ Error checking pair ${pairAddress}:`, pairError)
+          farmingLogger.warn(`❌ Error checking pair ${pairAddress}:`, pairError)
         }
       }
 
-      console.log(`✅ Found ${pools.length} whitelisted pools`)
+      farmingLogger.debug(`✅ Found ${pools.length} whitelisted pools`)
       return pools
     } catch (error) {
-      console.error('❌ Error fetching whitelisted pools:', error)
+      farmingLogger.error('❌ Error fetching whitelisted pools:', error)
       return []
     }
   }, [getLiquidityPoolManagerContract])
@@ -270,12 +272,12 @@ export function useFarmingContracts() {
       const provider = getProvider()
 
       if (!liquidityManagerContract || !provider) {
-        console.warn('Contracts not available - provider not connected')
+        farmingLogger.warn('Contracts not available - provider not connected')
         return null
       }
 
       try {
-        console.log(`🔍 Getting staking info for pair: ${pairAddress}`)
+        farmingLogger.debug(`🔍 Getting staking info for pair: ${pairAddress}`)
 
         // Step 1: Get basic pool info from LiquidityPoolManagerV2
         const poolInfoResults = await Promise.allSettled([
@@ -292,22 +294,22 @@ export function useFarmingContracts() {
 
         // Log if getKlcLiquidity failed (expected for KSWAP/USDT)
         if (poolInfoResults[2].status === 'rejected') {
-          console.log(`⚠️  getKlcLiquidity failed for ${pairAddress} (likely non-WKLC pair): ${poolInfoResults[2].reason?.message || 'Unknown error'}`)
+          farmingLogger.debug(`⚠️  getKlcLiquidity failed for ${pairAddress} (likely non-WKLC pair): ${poolInfoResults[2].reason?.message || 'Unknown error'}`)
         }
 
-        console.log(`📊 Pool registry data for ${pairAddress}:`)
-        console.log(`  - Is whitelisted: ${isWhitelisted}`)
-        console.log(`  - Pool weight: ${poolWeight.toString()}`)
-        console.log(`  - KLC Liquidity: ${klcLiquidity.toString()}`)
-        console.log(`  - Staking contract: ${stakingContractAddress}`)
+        farmingLogger.debug(`📊 Pool registry data for ${pairAddress}:`)
+        farmingLogger.debug(`  - Is whitelisted: ${isWhitelisted}`)
+        farmingLogger.debug(`  - Pool weight: ${poolWeight.toString()}`)
+        farmingLogger.debug(`  - KLC Liquidity: ${klcLiquidity.toString()}`)
+        farmingLogger.debug(`  - Staking contract: ${stakingContractAddress}`)
 
         if (!isWhitelisted) {
-          console.warn(`❌ Pool ${pairAddress} is not whitelisted`)
+          farmingLogger.warn(`❌ Pool ${pairAddress} is not whitelisted`)
           return null
         }
 
         if (!stakingContractAddress || stakingContractAddress === '0x0000000000000000000000000000000000000000') {
-          console.warn(`❌ No staking contract found for ${pairAddress}`)
+          farmingLogger.warn(`❌ No staking contract found for ${pairAddress}`)
           return null
         }
 
@@ -329,24 +331,24 @@ export function useFarmingContracts() {
         const userStakedAmount = stakingResults[3].status === 'fulfilled' ? stakingResults[3].value : BigNumber.from('0')
         const userEarnedAmount = stakingResults[4].status === 'fulfilled' ? stakingResults[4].value : BigNumber.from('0')
 
-        console.log(`📊 Staking contract data:`)
-        console.log(`  - Total staked: ${totalSupply.toString()} LP tokens`)
-        console.log(`  - Reward rate: ${rewardRate.toString()} KSWAP/second`)
-        console.log(`  - Period finish: ${periodFinish} (${new Date(periodFinish * 1000).toISOString()})`)
-        console.log(`  - User staked: ${userStakedAmount.toString()} LP tokens`)
-        console.log(`  - User earned: ${userEarnedAmount.toString()} KSWAP`)
+        farmingLogger.debug(`📊 Staking contract data:`)
+        farmingLogger.debug(`  - Total staked: ${totalSupply.toString()} LP tokens`)
+        farmingLogger.debug(`  - Reward rate: ${rewardRate.toString()} KSWAP/second`)
+        farmingLogger.debug(`  - Period finish: ${periodFinish} (${new Date(periodFinish * 1000).toISOString()})`)
+        farmingLogger.debug(`  - User staked: ${userStakedAmount.toString()} LP tokens`)
+        farmingLogger.debug(`  - User earned: ${userEarnedAmount.toString()} KSWAP`)
 
         // Log any failed staking contract calls
         stakingResults.forEach((result, index) => {
           if (result.status === 'rejected') {
             const callNames = ['totalSupply', 'rewardRate', 'periodFinish', 'balanceOf', 'earned']
-            console.error(`❌ Failed staking call ${callNames[index]}:`, result.reason)
+            farmingLogger.error(`❌ Failed staking call ${callNames[index]}:`, result.reason)
           }
         })
 
         // If pool is not whitelisted, return null
         if (!isWhitelisted) {
-          console.warn(`❌ Pool ${pairAddress} is not whitelisted`)
+          farmingLogger.warn(`❌ Pool ${pairAddress} is not whitelisted`)
           return null
         }
 
@@ -363,11 +365,11 @@ export function useFarmingContracts() {
           klcLiquidity // Include KLC liquidity for TVL display
         }
       } catch (contractError) {
-        console.error('❌ Contract calls failed:', contractError)
+        farmingLogger.error('❌ Contract calls failed:', contractError)
         return null
       }
     } catch (error) {
-      console.error('Error fetching staking info:', error)
+      farmingLogger.error('Error fetching staking info:', error)
       return null
     }
   }, [getLiquidityPoolManagerContract, getTreasuryVesterContract])
@@ -380,7 +382,7 @@ export function useFarmingContracts() {
       const treasuryVesterContract = getTreasuryVesterContract()
 
       if (!liquidityManagerContract || !treasuryVesterContract) {
-        console.warn('Contracts not available for APR calculation')
+        farmingLogger.warn('Contracts not available for APR calculation')
         return null
       }
 
@@ -430,11 +432,11 @@ export function useFarmingContracts() {
           combinedApr: stakingApr + swapFeeApr
         }
       } catch (contractError) {
-        console.error('Contract APR calculation failed:', contractError)
+        farmingLogger.error('Contract APR calculation failed:', contractError)
         return null
       }
     } catch (error) {
-      console.error('Error fetching pool APR:', error)
+      farmingLogger.error('Error fetching pool APR:', error)
       return null
     }
   }, [getLiquidityPoolManagerContract, getTreasuryVesterContract])
@@ -451,7 +453,7 @@ export function useFarmingContracts() {
 
       // TODO: Implement actual liquidity addition through LiquidityPoolManagerV2
       // This would involve calling the appropriate method on the contract
-      console.log('Adding liquidity to pool:', { pairAddress, amount: amount.toString() })
+      farmingLogger.debug('Adding liquidity to pool:', { pairAddress, amount: amount.toString() })
 
       // Mock transaction for now
       const mockTx = {
@@ -462,7 +464,7 @@ export function useFarmingContracts() {
 
       return await signTransaction(mockTx)
     } catch (error) {
-      console.error('Error adding liquidity:', error)
+      farmingLogger.error('Error adding liquidity:', error)
       return null
     }
   }, [getLiquidityPoolManagerContract, signTransaction])
@@ -478,7 +480,7 @@ export function useFarmingContracts() {
       if (!contract) return null
 
       // TODO: Implement actual liquidity removal through LiquidityPoolManagerV2
-      console.log('Removing liquidity from pool:', { pairAddress, amount: amount.toString() })
+      farmingLogger.debug('Removing liquidity from pool:', { pairAddress, amount: amount.toString() })
 
       // Mock transaction for now
       const mockTx = {
@@ -489,14 +491,14 @@ export function useFarmingContracts() {
 
       return await signTransaction(mockTx)
     } catch (error) {
-      console.error('Error removing liquidity:', error)
+      farmingLogger.error('Error removing liquidity:', error)
       return null
     }
   }, [getLiquidityPoolManagerContract, signTransaction])
 
   const claimVestedRewards = useCallback(async (): Promise<string | null> => {
     try {
-      console.log('Claiming vested rewards from TreasuryVester')
+      farmingLogger.debug('Claiming vested rewards from TreasuryVester')
 
       // Use the new executeContractCall helper
       return await executeContractCall(
@@ -507,7 +509,7 @@ export function useFarmingContracts() {
         treasuryVesterABI
       )
     } catch (error) {
-      console.error('Error claiming vested rewards:', error)
+      farmingLogger.error('Error claiming vested rewards:', error)
       return null
     }
   }, [executeContractCall])
@@ -517,7 +519,7 @@ export function useFarmingContracts() {
     stakingRewardAddress: string
   ): Promise<string | null> => {
     try {
-      console.log('Claiming staking rewards from:', stakingRewardAddress)
+      farmingLogger.debug('Claiming staking rewards from:', stakingRewardAddress)
 
       // Use the new executeContractCall helper
       return await executeContractCall(
@@ -530,7 +532,7 @@ export function useFarmingContracts() {
         ]
       )
     } catch (error) {
-      console.error('Error claiming staking rewards:', error)
+      farmingLogger.error('Error claiming staking rewards:', error)
       return null
     }
   }, [executeContractCall])
@@ -542,7 +544,7 @@ export function useFarmingContracts() {
       const contract = getLiquidityPoolManagerContract()
       if (!contract) return null
 
-      console.log('Triggering calculate and distribute')
+      farmingLogger.debug('Triggering calculate and distribute')
 
       // Encode the calculateAndDistribute() function call
       const data = ContractEncoder.encodeCalculateAndDistribute()
@@ -566,7 +568,7 @@ export function useFarmingContracts() {
 
       return await signTransaction(tx)
     } catch (error) {
-      console.error('Error calculating and distributing:', error)
+      farmingLogger.error('Error calculating and distributing:', error)
       return null
     }
   }, [getLiquidityPoolManagerContract, signTransaction, getProvider])
@@ -578,7 +580,7 @@ export function useFarmingContracts() {
     amount: BigNumber
   ): Promise<string | null> => {
     try {
-      console.log('Approving LP tokens:', {
+      farmingLogger.debug('Approving LP tokens:', {
         lpTokenAddress,
         stakingRewardAddress,
         amount: amount.toString()
@@ -595,7 +597,7 @@ export function useFarmingContracts() {
         ]
       )
     } catch (error) {
-      console.error('Error approving LP tokens:', error)
+      farmingLogger.error('Error approving LP tokens:', error)
       return null
     }
   }, [executeContractCall])
@@ -619,7 +621,7 @@ export function useFarmingContracts() {
       const domain = {
         name: 'KalySwap LP', // This might need to be adjusted based on the actual LP token name
         version: '1',
-        chainId: 3888,
+        chainId: CHAIN_IDS.KALYCHAIN,
         verifyingContract: lpTokenAddress
       }
 
@@ -685,7 +687,7 @@ export function useFarmingContracts() {
         sig.s
       ])
 
-      console.log('Staking LP tokens with permit:', {
+      farmingLogger.debug('Staking LP tokens with permit:', {
         stakingRewardAddress,
         lpTokenAddress,
         amount: amount.toString(),
@@ -701,7 +703,7 @@ export function useFarmingContracts() {
 
       return await signTransaction(tx)
     } catch (error) {
-      console.error('Error staking LP tokens with permit:', error)
+      farmingLogger.error('Error staking LP tokens with permit:', error)
       return null
     }
   }, [executeContractCall, getProvider])
@@ -713,7 +715,7 @@ export function useFarmingContracts() {
     version: number = 2
   ): Promise<string | null> => {
     try {
-      console.log('Staking LP tokens (fallback method):', {
+      farmingLogger.debug('Staking LP tokens (fallback method):', {
         stakingRewardAddress,
         amount: amount.toString()
       })
@@ -729,7 +731,7 @@ export function useFarmingContracts() {
         ]
       )
     } catch (error) {
-      console.error('Error staking LP tokens:', error)
+      farmingLogger.error('Error staking LP tokens:', error)
       return null
     }
   }, [executeContractCall])
@@ -741,7 +743,7 @@ export function useFarmingContracts() {
     version: number = 2
   ): Promise<string | null> => {
     try {
-      console.log('Unstaking LP tokens:', {
+      farmingLogger.debug('Unstaking LP tokens:', {
         stakingRewardAddress,
         amount: amount.toString(),
         version
@@ -759,7 +761,7 @@ export function useFarmingContracts() {
         ]
       )
     } catch (error) {
-      console.error('Error unstaking LP tokens:', error)
+      farmingLogger.error('Error unstaking LP tokens:', error)
       return null
     }
   }, [executeContractCall])

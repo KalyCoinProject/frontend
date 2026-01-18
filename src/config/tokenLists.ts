@@ -25,7 +25,7 @@ const TOKEN_LIST_URLS = {
  */
 export const TOKEN_LIST_CONFIGS: Record<number, TokenListConfig[]> = {
   // KalyChain (3888) - Use traditional token list
-  3888: [
+  [CHAIN_IDS.KALYCHAIN]: [
     {
       name: 'KalySwap Default',
       url: TOKEN_LIST_URLS.KALYSWAP_DEFAULT,
@@ -121,28 +121,32 @@ export function getSupportedChainIds(): number[] {
 
 /**
  * Token list metadata for UI display
+ * @deprecated Use CHAIN_METADATA from '@/config/chains' instead
+ * This is kept for backward compatibility but will be removed in a future release.
  */
+import { CHAIN_METADATA, RPC_URLS, CHAIN_IDS } from './chains';
+
 export const TOKEN_LIST_METADATA = {
-  3888: {
-    name: 'KalyChain',
-    symbol: 'KLC',
-    logo: '/tokens/klc.png',
-    explorer: 'https://kalyscan.io',
-    rpc: 'https://rpc.kalychain.io/rpc'
+  [CHAIN_IDS.KALYCHAIN]: {
+    name: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN].name,
+    symbol: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN].symbol,
+    logo: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN].logo,
+    explorer: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN].explorer,
+    rpc: RPC_URLS[CHAIN_IDS.KALYCHAIN]
   },
-  56: {
-    name: 'BNB Smart Chain',
-    symbol: 'BNB',
-    logo: '/tokens/bnb.png',
-    explorer: 'https://bscscan.com',
-    rpc: 'https://bsc-dataseed.binance.org'
+  [CHAIN_IDS.BSC]: {
+    name: CHAIN_METADATA[CHAIN_IDS.BSC].name,
+    symbol: CHAIN_METADATA[CHAIN_IDS.BSC].symbol,
+    logo: CHAIN_METADATA[CHAIN_IDS.BSC].logo,
+    explorer: CHAIN_METADATA[CHAIN_IDS.BSC].explorer,
+    rpc: RPC_URLS[CHAIN_IDS.BSC]
   },
-  42161: {
-    name: 'Arbitrum One',
-    symbol: 'ETH',
-    logo: '/tokens/eth.png',
-    explorer: 'https://arbiscan.io',
-    rpc: 'https://arb1.arbitrum.io/rpc'
+  [CHAIN_IDS.ARBITRUM]: {
+    name: CHAIN_METADATA[CHAIN_IDS.ARBITRUM].name,
+    symbol: CHAIN_METADATA[CHAIN_IDS.ARBITRUM].symbol,
+    logo: CHAIN_METADATA[CHAIN_IDS.ARBITRUM].logo,
+    explorer: CHAIN_METADATA[CHAIN_IDS.ARBITRUM].explorer,
+    rpc: RPC_URLS[CHAIN_IDS.ARBITRUM]
   }
 };
 

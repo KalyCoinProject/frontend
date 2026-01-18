@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -8,6 +10,7 @@ import { Search } from 'lucide-react';
 import { getContract } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { ERC20_ABI } from '@/config/abis';
+import { tokenLogger } from '@/lib/logger';
 
 interface Token {
   chainId: number;
@@ -90,7 +93,7 @@ export default function TokenSelectorModal({
 
       // Create token object
       const customToken: Token = {
-        chainId: 3888,
+        chainId: CHAIN_IDS.KALYCHAIN,
         address: tokenAddress,
         decimals: Number(decimals),
         name: name as string,
@@ -100,7 +103,7 @@ export default function TokenSelectorModal({
 
       return customToken;
     } catch (error) {
-      console.error('Error fetching custom token:', error);
+      tokenLogger.error('Error fetching custom token:', error);
       throw error;
     }
   };

@@ -1,5 +1,7 @@
 'use client';
 
+import { stakingLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,7 +58,7 @@ export default function UserPosition({ className }: UserPositionProps) {
 
       toast.success('Rewards claimed!', `Successfully claimed ${earnedRewardsFormatted} KLC rewards`);
     } catch (error) {
-      console.error('Claim rewards error:', error);
+      stakingLogger.error('Claim rewards error:', error);
       toast.error('Claim failed', 'Please try again or check your wallet');
     } finally {
       setIsClaiming(false);
@@ -79,7 +81,7 @@ export default function UserPosition({ className }: UserPositionProps) {
 
       toast.success('Successfully exited staking!', `Withdrew ${stakedBalanceFormatted} KLC and claimed ${earnedRewardsFormatted} KLC rewards`);
     } catch (error) {
-      console.error('Exit staking error:', error);
+      stakingLogger.error('Exit staking error:', error);
       toast.error('Exit failed', 'Please try again or check your wallet');
     } finally {
       setIsExiting(false);

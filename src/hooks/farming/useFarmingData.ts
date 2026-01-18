@@ -10,6 +10,8 @@ import { usePairAddresses } from './usePairAddresses'
 import { LP_FARMING_POOLS, DOUBLE_SIDE_STAKING } from '@/config/farming'
 import { batchFarmingCalls } from '@/utils/multicall'
 import { contractCache, CacheKeys, withCache } from '@/utils/contractCache'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 // Mock TokenAmount implementation with proper BigNumber handling
 class MockTokenAmount implements TokenAmount {
@@ -21,7 +23,7 @@ class MockTokenAmount implements TokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(Math.min(digits, 6))
     } catch (error) {
-      console.error('Error in toSignificant:', error)
+      farmingLogger.error('Error in toSignificant:', error)
       return '0'
     }
   }
@@ -32,7 +34,7 @@ class MockTokenAmount implements TokenAmount {
       const value = parseFloat(formatted)
       return value.toFixed(digits)
     } catch (error) {
-      console.error('Error in toFixed:', error)
+      farmingLogger.error('Error in toFixed:', error)
       return '0'
     }
   }
@@ -42,7 +44,7 @@ class MockTokenAmount implements TokenAmount {
       const formatted = formatUnits(this.raw, this.token.decimals)
       return parseFloat(formatted)
     } catch (error) {
-      console.error('Error in toNumber:', error)
+      farmingLogger.error('Error in toNumber:', error)
       return 0
     }
   }
@@ -170,7 +172,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
             symbol: pool.tokens[0].symbol,
             name: pool.tokens[0].name,
             decimals: pool.tokens[0].decimals,
-            chainId: chainId || 3888
+            chainId: chainId || CHAIN_IDS.KALYCHAIN
           }
 
           const token1: Token = {
@@ -178,7 +180,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
             symbol: pool.tokens[1].symbol,
             name: pool.tokens[1].name,
             decimals: pool.tokens[1].decimals,
-            chainId: chainId || 3888
+            chainId: chainId || CHAIN_IDS.KALYCHAIN
           }
 
           // Get pair address (use fetched address or fallback to config)
@@ -190,7 +192,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
 
 
             if (!pairAddress) {
-              console.warn(`No pair address found for ${poolKey} - showing N/A data`)
+              farmingLogger.warn(`No pair address found for ${poolKey} - showing N/A data`)
               // Return N/A data when pair address is not available
               return createNAStakingInfo(pool, token0, token1, 'N/A')
             }
@@ -201,7 +203,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
               symbol: `${token0.symbol}-${token1.symbol}`,
               name: `${token0.name}-${token1.name} LP`,
               decimals: 18,
-              chainId: chainId || 3888
+              chainId: chainId || CHAIN_IDS.KALYCHAIN
             }
 
             // Get staking info from contract using pair address
@@ -209,7 +211,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
             const aprData = await getPoolAPR(pairAddress)
 
             if (!contractData) {
-              console.warn(`No contract data available for ${poolKey}`)
+              farmingLogger.warn(`No contract data available for ${poolKey}`)
               return createNAStakingInfo(pool, token0, token1, pairAddress)
             }
 
@@ -270,7 +272,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
 
             return stakingInfo
           } catch (poolError) {
-            console.error(`Error fetching data for pool ${pool.stakingRewardAddress}:`, poolError)
+            farmingLogger.error(`Error fetching data for pool ${pool.stakingRewardAddress}:`, poolError)
             // Return N/A data if contract calls fail
             return createNAStakingInfo(pool, token0, token1, pairAddress || 'N/A')
           }
@@ -279,9 +281,9 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
         const results = await Promise.all(stakingInfoPromises)
         const validResults = results.filter((result): result is DoubleSideStakingInfo => result !== null)
 
-        console.log('🎯 Final staking infos to display:', validResults.length)
+        farmingLogger.debug('Final staking infos to display:', validResults.length)
         validResults.forEach((info, index) => {
-          console.log(`Farm ${index + 1}: ${info.tokens[0].symbol}-${info.tokens[1].symbol}`, {
+          farmingLogger.debug(`Farm ${index + 1}: ${info.tokens[0].symbol}-${info.tokens[1].symbol}`, {
             totalStakedInUsd: info.totalStakedInUsd?.toFixed(6) || 'N/A',
             totalStakedSymbol: info.totalStakedInUsd?.token.symbol || 'N/A',
             totalRewardRatePerWeek: info.totalRewardRatePerWeek?.toFixed(6) || 'N/A',
@@ -292,7 +294,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
 
         setStakingInfos(validResults)
       } catch (err) {
-        console.error('Error fetching staking data:', err)
+        farmingLogger.error('Error fetching staking data:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch staking data')
       } finally {
         setIsLoading(false)
@@ -304,7 +306,7 @@ export function useFarmingData(pools?: DoubleSideStaking[]) {
   }, [farmingPools, address, chainId, pairAddresses, refreshTrigger]) // Added refreshTrigger for manual refresh
 
   const refetch = useCallback(() => {
-    console.log('🔄 Refetching farm data...')
+    farmingLogger.debug('Refetching farm data...')
     setError(null)
     // Trigger refresh without setting loading state - follows swaps page pattern
     setRefreshTrigger(prev => prev + 1)

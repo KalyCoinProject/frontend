@@ -1,3 +1,5 @@
+import { CHAIN_IDS } from '@/config/chains';
+import { swapLogger } from '@/lib/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { getPairSwaps, getRecentSwaps } from '@/lib/subgraph-client';
 import { getPoolTrades } from '@/lib/geckoterminal-client';
@@ -145,7 +147,7 @@ export function usePairSwaps({
   pairAddress,
   limit = 20,
   userAddress,
-  chainId = 3888
+  chainId = CHAIN_IDS.KALYCHAIN
 }: UsePairSwapsProps): UsePairSwapsResult {
   const [swaps, setSwaps] = useState<FormattedSwap[]>([]);
   const [loading, setLoading] = useState(false);
@@ -159,10 +161,10 @@ export function usePairSwaps({
       // For BSC and Arbitrum, use GeckoTerminal for recent trades only
       // User trades are not supported (will show explorer link instead)
       if ((chainId === 56 || chainId === 42161) && !userAddress) {
-        console.log('Fetching swaps from GeckoTerminal...', { chainId, pairAddress, limit });
+        swapLogger.debug('Fetching swaps from GeckoTerminal...', { chainId, pairAddress, limit });
 
         if (!pairAddress) {
-          console.warn('⚠️ GeckoTerminal requires pairAddress for trades');
+          swapLogger.warn('⚠️ GeckoTerminal requires pairAddress for trades');
           setSwaps([]);
           setLoading(false);
           return;
@@ -176,14 +178,14 @@ export function usePairSwaps({
           formatGeckoTerminalTrade(trade, pairAddress)
         );
 
-        console.log(`✅ Fetched ${formattedSwaps.length} trades from GeckoTerminal`);
+        swapLogger.debug(`✅ Fetched ${formattedSwaps.length} trades from GeckoTerminal`);
         setSwaps(formattedSwaps);
         setLoading(false);
         return;
       }
 
       // For KalyChain or when userAddress is provided, use subgraph
-      console.log('Fetching swaps from subgraph...', { chainId, pairAddress, limit, userAddress });
+      swapLogger.debug('Fetching swaps from subgraph...', { chainId, pairAddress, limit, userAddress });
 
       let rawSwaps: SubgraphSwap[] = [];
 
@@ -194,7 +196,7 @@ export function usePairSwaps({
           [],
           `Pair swaps for ${pairAddress}`
         );
-        console.log(`✅ Fetched ${rawSwaps.length} swaps for pair ${pairAddress}`);
+        swapLogger.debug(`✅ Fetched ${rawSwaps.length} swaps for pair ${pairAddress}`);
       } else {
         // Fetch recent swaps across all pairs with safe API call
         rawSwaps = await safeApiCall(
@@ -202,7 +204,7 @@ export function usePairSwaps({
           [],
           'Recent swaps'
         );
-        console.log(`✅ Fetched ${rawSwaps.length} recent swaps`);
+        swapLogger.debug(`✅ Fetched ${rawSwaps.length} recent swaps`);
       }
 
       // Format swaps for UI
@@ -215,13 +217,13 @@ export function usePairSwaps({
           swap.from.toLowerCase() === userAddressLower ||
           swap.to.toLowerCase() === userAddressLower
         );
-        console.log(`Filtered to ${formattedSwaps.length} swaps for user ${userAddress}`);
+        swapLogger.debug(`Filtered to ${formattedSwaps.length} swaps for user ${userAddress}`);
       }
 
       setSwaps(formattedSwaps);
 
     } catch (err) {
-      console.error('Error fetching swaps:', err);
+      swapLogger.error('Error fetching swaps:', err);
 
       // Handle network errors gracefully
       if (isNetworkError(err)) {

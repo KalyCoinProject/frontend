@@ -1,3 +1,5 @@
+import { CHAIN_IDS } from '@/config/chains';
+import { walletLogger } from '@/lib/logger';
 // Central DEX Configuration System
 // This is the single source of truth for all DEX contracts across chains
 
@@ -8,7 +10,7 @@ import { UNISWAP_V2_CONFIG } from './uniswap-v2';
 
 // Main DEX configuration mapping
 export const DEX_CONFIGS: Record<SupportedDexChainId, DexConfig> = {
-  3888: KALYSWAP_CONFIG,    // KalyChain
+  [CHAIN_IDS.KALYCHAIN]: KALYSWAP_CONFIG,    // KalyChain
   56: PANCAKESWAP_CONFIG,   // BSC
   42161: UNISWAP_V2_CONFIG, // Arbitrum
 };
@@ -20,7 +22,7 @@ export const DEX_CONFIGS: Record<SupportedDexChainId, DexConfig> = {
  */
 export function getDexConfig(chainId: number): DexConfig | null {
   if (!isSupportedDexChain(chainId)) {
-    console.warn(`Chain ${chainId} is not supported for DEX operations`);
+    walletLogger.warn(`Chain ${chainId} is not supported for DEX operations`);
     return null;
   }
   return DEX_CONFIGS[chainId];

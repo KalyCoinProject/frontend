@@ -1,5 +1,7 @@
 'use client';
 
+import { stakingLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,7 +100,7 @@ export default function StakingForm({ className }: StakingFormProps) {
 
       setStakeAmount('');
     } catch (error) {
-      console.error('Staking error:', error);
+      stakingLogger.error('Staking error:', error);
       toast.error('Staking failed', 'Please try again or check your wallet');
     } finally {
       setIsStaking(false);
@@ -125,7 +127,7 @@ export default function StakingForm({ className }: StakingFormProps) {
 
       setWithdrawAmount('');
     } catch (error) {
-      console.error('Withdrawal error:', error);
+      stakingLogger.error('Withdrawal error:', error);
       toast.error('Withdrawal failed', 'Please try again or check your wallet');
     } finally {
       setIsWithdrawing(false);

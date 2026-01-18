@@ -1,3 +1,4 @@
+import { subgraphLogger } from '@/lib/logger';
 /**
  * Centralized API configuration for KalySwap frontend
  * Handles environment-based URL configuration for different services
@@ -18,7 +19,7 @@ const validateApiUrl = (url: string): boolean => {
 
 // Ensure API URL is valid
 if (!validateApiUrl(API_BASE_URL)) {
-  console.error('❌ Invalid API_BASE_URL:', API_BASE_URL);
+  subgraphLogger.error('❌ Invalid API_BASE_URL:', API_BASE_URL);
 }
 
 /**
@@ -98,7 +99,7 @@ export async function apiRequest<T = any>(
     return data;
   } catch (error) {
     if (isDevelopment) {
-      console.error(`❌ API Request failed (${url}):`, error);
+      subgraphLogger.error(`❌ API Request failed (${url}):`, error);
     }
 
     // Retry logic for network errors
@@ -106,7 +107,7 @@ export async function apiRequest<T = any>(
         (error instanceof TypeError || (error instanceof Error && error.name === 'AbortError'))) {
       
       if (isDevelopment) {
-        console.log(`🔄 Retrying request (${retryCount + 1}/${REQUEST_CONFIG.RETRY_ATTEMPTS}): ${url}`);
+        subgraphLogger.debug(`🔄 Retrying request (${retryCount + 1}/${REQUEST_CONFIG.RETRY_ATTEMPTS}): ${url}`);
       }
       
       await new Promise(resolve => setTimeout(resolve, REQUEST_CONFIG.RETRY_DELAY * (retryCount + 1)));
@@ -161,7 +162,7 @@ export async function checkApiHealth(): Promise<boolean> {
 
 // Log configuration in development
 if (isDevelopment) {
-  console.log('🔧 API Configuration:', {
+  subgraphLogger.debug('🔧 API Configuration:', {
     BASE_URL: API_BASE_URL,
     GRAPHQL_ENDPOINT: API_CONFIG.GRAPHQL_ENDPOINT,
     ENVIRONMENT: process.env.NODE_ENV,

@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTokenLists } from '@/hooks/useTokenLists';
@@ -35,119 +37,15 @@ import {
 import TradingChart from '@/components/charts/TradingChart';
 import TransactionData from '@/components/swaps/TransactionData';
 import SwapInterfaceWrapper from '@/components/swap/SwapInterfaceWrapper';
-import { formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
-import { usePairMarketStats } from '@/hooks/usePairMarketStats';
+import { AlchemyPayWidget } from '@/components/onramp';
+import { formatTokenPrice, formatPriceChange, usePairMarketStats } from '@/hooks';
 import { useWallet } from '@/hooks/useWallet';
 import { PriceDataProvider } from '@/contexts/PriceDataContext';
 import { useChainId } from 'wagmi';
 import { useHydration } from '@/hooks/useHydration';
+import { Token } from '@/config/dex/types';
+import { logger } from '@/lib/logger';
 import './swaps.css';
-
-// Token interface based on KalyChain official tokenlist
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  balance?: string;
-  isNative?: boolean;
-}
-
-// Official KalyChain tokens from https://raw.githubusercontent.com/KalyCoinProject/tokenlists/main/kalyswap.tokenlist.json
-const KALYCHAIN_TOKENS: Token[] = [
-  // Add native KLC as first option
-  {
-    chainId: 3888,
-    address: '0x0000000000000000000000000000000000000000', // Native token
-    decimals: 18,
-    name: 'KalyCoin',
-    symbol: 'KLC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png',
-    isNative: true
-  },
-  {
-    chainId: 3888,
-    address: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3',
-    decimals: 18,
-    name: 'Wrapped KalyCoin',
-    symbol: 'wKLC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a',
-    decimals: 18,
-    name: 'KalySwap Token',
-    symbol: 'KSWAP',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A',
-    decimals: 6,
-    name: 'Tether USD',
-    symbol: 'USDT',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9',
-    decimals: 6,
-    name: 'USD Coin',
-    symbol: 'USDC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6',
-    decimals: 18,
-    name: 'DAI Token',
-    symbol: 'DAI',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455',
-    decimals: 8,
-    name: 'Wrapped BTC',
-    symbol: 'WBTC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xfdbB253753dDE60b11211B169dC872AaE672879b',
-    decimals: 18,
-    name: 'Ether Token',
-    symbol: 'ETH',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xfdbB253753dDE60b11211B169dC872AaE672879b/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb',
-    decimals: 18,
-    name: 'Binance',
-    symbol: 'BNB',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
-    decimals: 18,
-    name: 'Polygon Token',
-    symbol: 'POL',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-    decimals: 18,
-    name: 'Clisha Coin',
-    symbol: 'CLISHA',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C/logo_24.png'
-  }
-];
 
 // Swap interface
 interface SwapState {
@@ -166,6 +64,9 @@ export default function SwapsPage() {
 
   // Use wallet hook to get connection status and address
   const { isConnected, address: userAddress } = useWallet();
+
+  // Get dynamic token list for the TokenSelector
+  const { tokens: pageTokens } = useTokenLists({ chainId: CHAIN_IDS.KALYCHAIN });
 
   // Swap state - tokens will be set dynamically by useTokenLists
   const [swapState, setSwapState] = useState<SwapState>({
@@ -278,7 +179,7 @@ export default function SwapsPage() {
           }
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        logger.error('Error fetching user data:', error);
       }
     };
 
@@ -371,7 +272,7 @@ export default function SwapsPage() {
 
     try {
       // In a real implementation, this would interact with the KalySwap DEX smart contracts
-      console.log('Executing swap:', swapState);
+      logger.debug('Executing swap:', swapState);
 
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -386,7 +287,7 @@ export default function SwapsPage() {
       }));
 
     } catch (error) {
-      console.error('Swap error:', error);
+      logger.error('Swap error:', error);
       alert('Swap failed. Please try again.');
     } finally {
       setLoading(false);
@@ -536,7 +437,7 @@ export default function SwapsPage() {
 
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'Failed to send transaction');
-      console.error('Send error:', error);
+      logger.error('Send error:', error);
     } finally {
       setLoading(false);
     }
@@ -636,7 +537,7 @@ export default function SwapsPage() {
       <Select
         value={selectedToken?.symbol || ''}
         onValueChange={(value) => {
-          const token = KALYCHAIN_TOKENS.find(t => t.symbol === value);
+          const token = pageTokens.find(t => t.symbol === value);
           if (token) onTokenSelect(token);
         }}
       >
@@ -664,7 +565,7 @@ export default function SwapsPage() {
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {KALYCHAIN_TOKENS.map((token) => (
+          {pageTokens.map((token) => (
             <SelectItem key={token.symbol} value={token.symbol}>
               <div className="flex items-center gap-2">
                 <img
@@ -788,18 +689,18 @@ function SwapsPageContent({
   try {
     wagmiChainId = useChainId();
   } catch (error) {
-    console.warn('Wagmi not available, using fallback chain ID:', error);
+    logger.warn('Wagmi not available, using fallback chain ID:', error);
     wagmiChainId = undefined;
   }
 
   // Use wagmi chain ID if available and hydrated, otherwise fallback to KalyChain
-  const chainId = isHydrated && wagmiChainId ? wagmiChainId : 3888;
+  const chainId = isHydrated && wagmiChainId ? wagmiChainId : CHAIN_IDS.KALYCHAIN;
 
   // Load dynamic tokens for current chain
   const { tokens: dynamicTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
 
   // Debug: Log token loading status
-  console.log('🪙 Swaps page token status:', {
+  logger.debug('🪙 Swaps page token status:', {
     chainId,
     tokensLoading,
     tokensError,
@@ -847,7 +748,7 @@ function SwapsPageContent({
 
     let tokenA, tokenB;
 
-    if (chainId === 3888) {
+    if (chainId === CHAIN_IDS.KALYCHAIN) {
       // KalyChain: KLC/USDT
       tokenA = dynamicTokens.find(token => token.symbol === 'KLC');
       tokenB = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
@@ -859,7 +760,7 @@ function SwapsPageContent({
       const stablecoins = dynamicTokens.filter(t =>
         ['BUSD', 'USDT', 'USDC', 'DAI'].includes(t.symbol)
       );
-      console.log('🔍 BSC available stablecoins:', stablecoins.map(t => ({
+      logger.debug('🔍 BSC available stablecoins:', stablecoins.map(t => ({
         symbol: t.symbol,
         address: t.address
       })));
@@ -869,11 +770,11 @@ function SwapsPageContent({
 
       // Fallback to USDT if BUSD not found
       if (!tokenB) {
-        console.warn('⚠️ BUSD not found in token list, falling back to USDT');
+        logger.warn('⚠️ BUSD not found in token list, falling back to USDT');
         tokenB = dynamicTokens.find(token => token.symbol === 'USDT');
       }
 
-      console.log('🔍 BSC default pair:', {
+      logger.debug('🔍 BSC default pair:', {
         tokenA: tokenA ? { symbol: tokenA.symbol, address: tokenA.address } : null,
         tokenB: tokenB ? { symbol: tokenB.symbol, address: tokenB.address } : null
       });
@@ -897,7 +798,7 @@ function SwapsPageContent({
 
   // Debug: Log default token pair
   useEffect(() => {
-    console.log('🎯 Default token pair for chain', chainId, ':',
+    logger.debug('🎯 Default token pair for chain', chainId, ':',
       defaultTokenPair ? `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}` : 'none'
     );
   }, [defaultTokenPair, chainId]);
@@ -913,7 +814,7 @@ function SwapsPageContent({
       // 1. No tokens are set yet, OR
       // 2. Chain has changed (current tokens are from different chain)
       if (!swapState.fromToken || !swapState.toToken || currentTokensFromDifferentChain) {
-        console.log('🔄 Setting default tokens for chain', chainId, ':',
+        logger.debug('🔄 Setting default tokens for chain', chainId, ':',
           `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}`);
         setSwapState(prev => ({
           ...prev,
@@ -926,7 +827,7 @@ function SwapsPageContent({
 
   // Memoize token change handler to prevent infinite re-renders
   const handleTokenChange = useMemo(() => (fromToken: Token | null, toToken: Token | null) => {
-    console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
+    logger.debug(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
     setSwapState(prev => ({
       ...prev,
       fromToken,
@@ -1027,7 +928,7 @@ function SwapsPageContent({
                         <Send className="h-3 w-3" />
                         Send
                       </TabsTrigger>
-                      <TabsTrigger value="buy" disabled className="flex items-center gap-1">
+                      <TabsTrigger value="buy" className="flex items-center gap-1">
                         <ShoppingCart className="h-3 w-3" />
                         Buy
                       </TabsTrigger>
@@ -1139,11 +1040,12 @@ function SwapsPageContent({
                 <TabsContent value="buy" className="mt-1">
                   <Card>
                     <CardContent className="pt-6">
-                      <div className="text-center py-8 text-gray-500">
-                        <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p className="font-medium">Buy Crypto Coming Soon</p>
-                        <p className="text-sm">Purchase crypto with fiat currency</p>
-                      </div>
+                      <AlchemyPayWidget
+                        defaultFiat="USD"
+                        defaultCrypto="KLC"
+                        defaultNetwork="KALYCHAIN"
+                        height={625}
+                      />
                     </CardContent>
                   </Card>
                 </TabsContent>

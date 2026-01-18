@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { TokenAmount } from '@hyperlane-xyz/sdk';
 import { useBridgeContext } from './useBridgeContext';
 import { useWallet } from '../useWallet';
+import { bridgeLogger } from '@/lib/logger';
 
 export interface BridgeBalancesParams {
   originChain: string;
@@ -48,7 +49,7 @@ export function useBridgeBalances(params: BridgeBalancesParams) {
           const originBal = await token.getBalance(multiProvider, account);
           setOriginBalance(originBal);
         } catch (err) {
-          console.warn('Failed to fetch origin balance:', err);
+          bridgeLogger.warn('Failed to fetch origin balance:', err);
           setOriginBalance(null);
         }
 
@@ -63,13 +64,13 @@ export function useBridgeBalances(params: BridgeBalancesParams) {
             setDestinationBalance(null);
           }
         } catch (err) {
-          console.warn('Failed to fetch destination balance:', err);
+          bridgeLogger.warn('Failed to fetch destination balance:', err);
           setDestinationBalance(null);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances';
         setError(errorMessage);
-        console.error('Balance fetch error:', err);
+        bridgeLogger.error('Balance fetch error:', err);
       } finally {
         setIsLoading(false);
       }

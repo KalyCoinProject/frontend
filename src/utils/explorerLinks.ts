@@ -1,3 +1,4 @@
+import { CHAIN_IDS } from '@/config/chains';
 /**
  * Blockchain Explorer URL utilities
  * Provides links to block explorers for different chains
@@ -8,7 +9,7 @@
  */
 export function getExplorerUrl(chainId: number): string {
   switch (chainId) {
-    case 3888:
+    case CHAIN_IDS.KALYCHAIN:
       return 'https://kalyscan.io';
     case 56:
       return 'https://bscscan.com';
@@ -24,7 +25,7 @@ export function getExplorerUrl(chainId: number): string {
  */
 export function getExplorerName(chainId: number): string {
   switch (chainId) {
-    case 3888:
+    case CHAIN_IDS.KALYCHAIN:
       return 'KalyScan';
     case 56:
       return 'BSCScan';

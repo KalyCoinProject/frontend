@@ -1,5 +1,7 @@
 'use client';
 
+import { launchpadLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -239,7 +241,7 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
       setProjects(allProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch launchpad data');
-      console.error('Error fetching launchpad data:', err);
+      launchpadLogger.error('Error fetching launchpad data:', err);
       
       // Set mock data for development
       setOverview({

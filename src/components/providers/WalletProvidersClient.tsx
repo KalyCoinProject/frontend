@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/config/wagmi.config'
 import { useHydration } from '@/hooks/useHydration'
 import { kalychain } from '@/config/chains'
+import { logger } from '@/lib/logger'
 
 // Import Rainbow Kit styles
 import '@rainbow-me/rainbowkit/styles.css'
@@ -39,7 +40,7 @@ function WalletProvidersClient({ children }: WalletProvidersClientProps) {
         import('@/connectors/internalWallet').then(({ internalWalletUtils }) => {
           internalWalletUtils.initialize()
         }).catch(error => {
-          console.warn('Failed to initialize internal wallet:', error)
+          logger.warn('Failed to initialize internal wallet:', error)
         })
       }, 0)
 
@@ -47,9 +48,14 @@ function WalletProvidersClient({ children }: WalletProvidersClientProps) {
     }
   }, [isHydrated])
 
-  // Return children without wallet providers during SSR
+  // Always wrap in QueryClientProvider for TanStack Query hooks
+  // Only wrap with wallet providers after hydration
   if (!isHydrated) {
-    return <>{children}</>
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
   }
 
   return (

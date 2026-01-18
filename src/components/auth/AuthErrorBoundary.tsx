@@ -1,5 +1,7 @@
 'use client';
 
+import { authLogger } from '@/lib/logger';
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,7 +43,7 @@ export class AuthErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('AuthErrorBoundary caught an error:', error, errorInfo);
+    authLogger.error('AuthErrorBoundary caught an error:', error, errorInfo);
     
     this.setState({
       error,
@@ -74,7 +76,7 @@ export class AuthErrorBoundary extends Component<Props, State> {
     try {
       localStorage.removeItem('auth_token');
     } catch (error) {
-      console.warn('Failed to clean up auth token:', error);
+      authLogger.warn('Failed to clean up auth token:', error);
     }
   }
 
@@ -205,13 +207,13 @@ export class AuthErrorBoundary extends Component<Props, State> {
  */
 export function useAuthErrorHandler() {
   const handleAuthError = (error: Error) => {
-    console.error('Authentication error:', error);
+    authLogger.error('Authentication error:', error);
     
     // Clean up auth token
     try {
       localStorage.removeItem('auth_token');
     } catch (e) {
-      console.warn('Failed to clean up auth token:', e);
+      authLogger.warn('Failed to clean up auth token:', e);
     }
 
     // Redirect to login for auth errors

@@ -1,3 +1,4 @@
+import { authLogger } from '@/lib/logger';
 import { useState, useEffect, useCallback } from 'react';
 import {
   getAuthToken,
@@ -50,7 +51,7 @@ export function useAuth(): UseAuthReturn {
 
       // Check if token is expired before making request
       if (isTokenExpired(token)) {
-        console.warn('Token is expired, removing from storage');
+        authLogger.warn('Token is expired, removing from storage');
         removeAuthToken();
         setUser(null);
         setIsLoading(false);
@@ -76,7 +77,7 @@ export function useAuth(): UseAuthReturn {
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      authLogger.error('Auth check failed:', error);
       const authError = parseAuthError(error);
 
       // Set user-friendly error message

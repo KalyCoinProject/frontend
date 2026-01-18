@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
@@ -13,6 +15,10 @@ import {
   getPoolInfo
 } from '@/lib/geckoterminal-client';
 import { Token } from '@/config/dex/types';
+import { priceLogger as logger } from '@/lib/logger';
+import { getEffectiveAddress } from '@/utils/tokens';
+import { calculatePriceFromReserves, calculatePriceFromReservesRaw } from '@/utils/price';
+import { isStablecoinAddress } from '@/config/contracts';
 
 // RPC endpoint for KalyChain
 const RPC_URL = 'https://rpc.kalychain.io/rpc';
@@ -61,7 +67,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
   // Fetch real chart data from subgraph for any pair
   const fetchSubgraphChartData = useCallback(async () => {
     try {
-      console.log('fetchSubgraphChartData called:', {
+      logger.debug('fetchSubgraphChartData called:', {
         baseToken: pair.baseToken,
         quoteToken: pair.quoteToken,
         timeframe
@@ -70,7 +76,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
       // We need a pair address to fetch data - this should be provided by the parent component
       // For now, let's try to get it dynamically using the factory contract
       if (!publicClient) {
-        console.log('⚠️ No publicClient available for pair address lookup');
+        logger.debug('⚠️ No publicClient available for pair address lookup');
         return;
       }
 
@@ -80,7 +86,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
       const dexConfig = getDexConfig(chainId);
 
       if (!dexConfig) {
-        console.log(`⚠️ Chain ${chainId} not supported for price data - no DEX configuration found`);
+        logger.debug(`⚠️ Chain ${chainId} not supported for price data - no DEX configuration found`);
         return;
       }
 
@@ -89,7 +95,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
       const quoteToken = findTokenBySymbol(pair.quoteToken, chainId);
 
       if (!baseToken || !quoteToken) {
-        console.log(`⚠️ Tokens not found in DEX config for ${pair.baseToken}/${pair.quoteToken} on chain ${chainId}`);
+        logger.debug(`⚠️ Tokens not found in DEX config for ${pair.baseToken}/${pair.quoteToken} on chain ${chainId}`);
         return;
       }
 
@@ -109,22 +115,22 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
       }) as string;
 
       if (!pairAddress || pairAddress === '0x0000000000000000000000000000000000000000') {
-        console.log(`⚠️ No pair found for ${pair.baseToken}/${pair.quoteToken}`);
+        logger.debug(`⚠️ No pair found for ${pair.baseToken}/${pair.quoteToken}`);
         return;
       }
 
-      console.log(`📊 Found pair address: ${pairAddress} for ${pair.baseToken}/${pair.quoteToken}`);
+      logger.debug(`📊 Found pair address: ${pairAddress} for ${pair.baseToken}/${pair.quoteToken}`);
 
       // Fetch pair day data from subgraph
       const days = timeframe === '1d' ? 1 : timeframe === '1w' ? 7 : timeframe === '1M' ? 30 : 7;
       const pairDayData = await getPairDayData(pairAddress.toLowerCase(), days, 0);
 
       if (!pairDayData || pairDayData.length === 0) {
-        console.log(`⚠️ No chart data found for pair ${pairAddress}`);
+        logger.debug(`⚠️ No chart data found for pair ${pairAddress}`);
         return;
       }
 
-      console.log(`📊 Fetched ${pairDayData.length} days of data for ${pair.baseToken}/${pair.quoteToken}`);
+      logger.debug(`📊 Fetched ${pairDayData.length} days of data for ${pair.baseToken}/${pair.quoteToken}`);
 
       // Convert subgraph data to chart format
       // Note: Subgraph provides daily data, so we'll create OHLC from daily prices
@@ -168,11 +174,11 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
         const volume = formattedData.reduce((sum, point) => sum + point.volume, 0);
         setVolume24h(volume);
 
-        console.log(`📊 ${pair.baseToken}/${pair.quoteToken} Chart Data: Price=${latest.close.toFixed(6)}, Change=${change.toFixed(2)}%, Volume=${volume.toFixed(2)}`);
+        logger.debug(`📊 ${pair.baseToken}/${pair.quoteToken} Chart Data: Price=${latest.close.toFixed(6)}, Change=${change.toFixed(2)}%, Volume=${volume.toFixed(2)}`);
       }
 
     } catch (err) {
-      console.error('Subgraph chart data error:', err);
+      logger.error('Subgraph chart data error:', err);
     }
   }, [pair.baseToken, pair.quoteToken, timeframe, publicClient]);
 
@@ -250,7 +256,7 @@ export function useTokenPrice(symbol: string) {
     const fetchTokenPrice = async () => {
       try {
         setIsLoading(true);
-        console.log('🔍 Fetching price for token:', symbol);
+        logger.debug('🔍 Fetching price for token:', symbol);
 
         // Get token address mapping
         const tokenAddressMap: Record<string, string> = {
@@ -318,7 +324,7 @@ export function useTokenPrice(symbol: string) {
 
         if (response.ok) {
           const result = await response.json();
-          console.log('📊 Token price response:', result);
+          logger.debug('📊 Token price response:', result);
 
           if (result.errors) {
             throw new Error(result.errors[0].message);
@@ -329,20 +335,14 @@ export function useTokenPrice(symbol: string) {
           if (result.data?.pairs && result.data.pairs.length > 0) {
             const pair = result.data.pairs[0];
 
-            // Calculate price based on reserves
-            if (pair.token0.id.toLowerCase() === tokenAddress.toLowerCase()) {
-              // Token is token0, price = reserve1 / reserve0
-              calculatedPrice = parseFloat(pair.reserve1) / parseFloat(pair.reserve0);
-            } else {
-              // Token is token1, price = reserve0 / reserve1
-              calculatedPrice = parseFloat(pair.reserve0) / parseFloat(pair.reserve1);
-            }
+            // Use centralized price calculation utility
+            calculatedPrice = calculatePriceFromReservesRaw(tokenAddress, pair);
           } else if (symbol === 'USDT') {
             // USDT is our base currency
             calculatedPrice = 1.0;
           } else {
             // Cannot calculate price without market data - do not use hardcoded values
-            console.warn(`No market data available for ${symbol} - cannot calculate price`);
+            logger.warn(`No market data available for ${symbol} - cannot calculate price`);
             calculatedPrice = 0;
           }
 
@@ -353,13 +353,13 @@ export function useTokenPrice(symbol: string) {
           throw new Error('Failed to fetch token price');
         }
       } catch (err) {
-        console.error('❌ Error fetching token price:', err);
+        logger.error('❌ Error fetching token price:', err);
         // Only use stablecoin prices as fallback - no hardcoded token prices
         if (symbol === 'USDT' || symbol === 'USDC' || symbol === 'DAI') {
           setPrice(1.0);
           setChange24h(0.1);
         } else {
-          console.warn(`No market data available for ${symbol} - cannot provide price`);
+          logger.warn(`No market data available for ${symbol} - cannot provide price`);
           setPrice(0);
           setChange24h(0);
         }
@@ -433,7 +433,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     publicClient = usePublicClient();
   } catch (e) {
     // Not in Wagmi context
-    console.log('Not in Wagmi context');
+    logger.debug('Not in Wagmi context');
   }
 
   // Check if we have valid tokens
@@ -443,12 +443,15 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
   // This ensures KLC/USDT and USDT/KLC both fetch the same pool data
   // IMPORTANT: Stablecoins should always be normalizedTokenB (quote token)
   // so price shows "stablecoin per token" = USD price of the token
+  // NOTE: Uses ADDRESS matching, not symbol matching (symbols are not unique)
   const [normalizedTokenA, normalizedTokenB] = useMemo(() => {
     if (!tokenA || !tokenB) return [tokenA, tokenB];
 
-    const stablecoins = ['USDT', 'USDC', 'DAI', 'BUSD', 'KUSD'];
-    const isTokenAStable = stablecoins.includes(tokenA.symbol);
-    const isTokenBStable = stablecoins.includes(tokenB.symbol);
+    // Check stablecoin status by ADDRESS (not symbol)
+    const addrA = getEffectiveAddress(tokenA).toLowerCase();
+    const addrB = getEffectiveAddress(tokenB).toLowerCase();
+    const isTokenAStable = isStablecoinAddress(addrA);
+    const isTokenBStable = isStablecoinAddress(addrB);
 
     // If tokenA is a stablecoin and tokenB is not, swap them
     // so the stablecoin is always the quote (normalizedTokenB)
@@ -461,10 +464,8 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     }
 
     // If both or neither are stablecoins, sort by address for consistency
-    const addrA = tokenA.address.toLowerCase();
-    const addrB = tokenB.address.toLowerCase();
     return addrA < addrB ? [tokenA, tokenB] : [tokenB, tokenA];
-  }, [tokenA?.address, tokenA?.symbol, tokenB?.address, tokenB?.symbol]);
+  }, [tokenA?.address, tokenB?.address]);
 
   // Get pair address dynamically from factory contract (like Uniswap)
   useEffect(() => {
@@ -475,7 +476,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       }
 
       if (!publicClient) {
-        console.log('⚠️ No publicClient available');
+        logger.debug('⚠️ No publicClient available');
         setPairAddress(null);
         return;
       }
@@ -485,7 +486,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         const address = await getPairAddress(publicClient, normalizedTokenA!, normalizedTokenB!);
 
         setPairAddress(address);
-        console.log('🔍 Pair address resolved (normalized order):', {
+        logger.debug('🔍 Pair address resolved (normalized order):', {
           originalTokenA: tokenA!.symbol,
           originalTokenB: tokenB!.symbol,
           normalizedTokenA: normalizedTokenA!.symbol,
@@ -494,7 +495,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
           exists: !!address
         });
       } catch (error) {
-        console.error('❌ Error getting pair address:', {
+        logger.error('❌ Error getting pair address:', {
           tokenA: tokenA!.symbol,
           tokenB: tokenB!.symbol,
           error: error instanceof Error ? error.message : error
@@ -527,9 +528,9 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
     try {
       // Determine chainId from tokens for multichain support
-      const chainId = normalizedTokenA?.chainId || normalizedTokenB?.chainId || 3888;
+      const chainId = normalizedTokenA?.chainId || normalizedTokenB?.chainId || CHAIN_IDS.KALYCHAIN;
 
-      console.log('🔗 Fetching chart data for chain (using normalized tokens):', {
+      logger.debug('🔗 Fetching chart data for chain (using normalized tokens):', {
         chainId,
         normalizedTokenA: normalizedTokenA?.symbol,
         normalizedTokenB: normalizedTokenB?.symbol,
@@ -540,13 +541,13 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
       // Route between GeckoTerminal (BSC/Arbitrum) and Subgraph (KalyChain)
       if (isGeckoTerminalSupported(chainId)) {
-        console.log('🦎 Using GeckoTerminal API for external chain:', chainId);
+        logger.debug('🦎 Using GeckoTerminal API for external chain:', chainId);
 
         // Find pool address if not provided
         let poolAddr = pairAddress;
 
         if (!poolAddr) {
-          console.log('🔍 Searching for pool address using normalized token order...');
+          logger.debug('🔍 Searching for pool address using normalized token order...');
           // Use normalized tokens for consistent pool lookup
           poolAddr = await findPoolAddress(chainId, normalizedTokenA!, normalizedTokenB!);
 
@@ -654,7 +655,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         // - User's tokenA is BASE and tokenB is QUOTE (pool already shows this)
         const shouldInvert = isTokenAQuote || (isTokenABase && !isTokenBQuote);
 
-        console.log('🔄 GeckoTerminal price orientation check:', {
+        logger.debug('🔄 GeckoTerminal price orientation check:', {
           userPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
           userTokenA: userTokenAAddr,
           userTokenB: userTokenBAddr,
@@ -676,7 +677,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         // Convert GeckoTerminal data to our chart format with optional inversion
         const chartData = convertGeckoTerminalToChartData(ohlcvList, shouldInvert);
 
-        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points${shouldInvert ? ' (inverted)' : ''}`, {
+        logger.debug(`✅ GeckoTerminal: Processed ${chartData.length} price points${shouldInvert ? ' (inverted)' : ''}`, {
           displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
           poolPair: `${poolBaseToken}/${poolQuoteToken}`,
           dataPoints: chartData.length,
@@ -687,7 +688,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
         // Only update state if this fetch hasn't been cancelled
         if (!currentFetch.cancel) {
-          console.log('📈 SETTING PRICE DATA FROM GECKOTERMINAL:', {
+          logger.debug('📈 SETTING PRICE DATA FROM GECKOTERMINAL:', {
             pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
             points: chartData.length,
             latestPrice: chartData[chartData.length - 1]?.close.toFixed(4),
@@ -696,13 +697,13 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
           setPriceData(chartData);
           setIsLoading(false);
         } else {
-          console.log('⚠️ GeckoTerminal fetch was cancelled, not updating state');
+          logger.debug('⚠️ GeckoTerminal fetch was cancelled, not updating state');
         }
         return;
       }
 
       // Use subgraph for KalyChain (chainId 3888)
-      console.log('📊 Using subgraph for KalyChain');
+      logger.debug('📊 Using subgraph for KalyChain');
 
       if (!pairAddress) {
         if (!currentFetch.cancel) {
@@ -723,7 +724,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         getPairData(pairAddress.toLowerCase(), chainId)
       ]);
 
-      console.log('🔍 Subgraph response:', {
+      logger.debug('🔍 Subgraph response:', {
         pairAddress: pairAddress.toLowerCase(),
         hourDataLength: hourData?.length || 0,
         pairDataExists: !!pairData,
@@ -737,55 +738,31 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         } : null
       });
 
-      console.log('📊 Direct subgraph response:', {
+      logger.debug('📊 Direct subgraph response:', {
         hourDataLength: hourData?.length || 0,
         pairData: pairData ? { id: pairData.id, reserve0: pairData.reserve0, reserve1: pairData.reserve1 } : null,
         sampleHourData: hourData?.slice(0, 2)
       });
 
       if (hourData && pairData) {
-        console.log('🔍 Raw subgraph data:', {
+        logger.debug('🔍 Raw subgraph data:', {
           hourDataLength: hourData.length,
           pairData: pairData ? { id: pairData.id, reserve0: pairData.reserve0, reserve1: pairData.reserve1 } : null,
           sampleHourData: hourData.slice(0, 2)
         });
 
-        // Get current price from pair reserves using same logic as historical data
+        // Get current price from pair reserves using centralized utility
         let currentPrice = 0;
-        if (pairData && pairData.token0 && pairData.token1) {
-          const reserve0 = parseFloat(pairData.reserve0);
-          const reserve1 = parseFloat(pairData.reserve1);
+        if (pairData && pairData.token0 && pairData.token1 && normalizedTokenA) {
+          currentPrice = calculatePriceFromReserves(normalizedTokenA, pairData);
 
-          // Helper to check if two symbols match (handles wrapped native tokens)
-          const symbolsMatch = (symbol1: string | undefined, symbol2: string | undefined): boolean => {
-            if (!symbol1 || !symbol2) return false;
-            if (symbol1 === symbol2) return true;
-            // Handle wrapped native token equivalents (WKLC = KLC, WETH = ETH, etc.)
-            const unwrap = (s: string) => s.startsWith('W') ? s.slice(1) : s;
-            return unwrap(symbol1) === unwrap(symbol2) || symbol1 === unwrap(symbol2) || unwrap(symbol1) === symbol2;
-          };
-
-          if (reserve0 > 0 && reserve1 > 0) {
-            // Use same logic as historical data calculation with NORMALIZED tokens
-            if (symbolsMatch(pairData.token0.symbol, normalizedTokenA?.symbol)) {
-              // normalizedTokenA is token0, so price = reserve1/reserve0 (how much token1 per token0)
-              currentPrice = reserve1 / reserve0;
-            } else if (symbolsMatch(pairData.token1.symbol, normalizedTokenA?.symbol)) {
-              // normalizedTokenA is token1, so price = reserve0/reserve1 (how much token0 per token1)
-              currentPrice = reserve0 / reserve1;
-            } else {
-              // Fallback: assume we want token1 price in token0
-              currentPrice = reserve1 / reserve0;
-            }
-          }
-
-          console.log('💰 Current price calculation:', {
+          logger.debug('💰 Current price calculation:', {
             normalizedTokenA: normalizedTokenA?.symbol,
             normalizedTokenB: normalizedTokenB?.symbol,
             token0: pairData.token0.symbol,
             token1: pairData.token1.symbol,
-            reserve0,
-            reserve1,
+            reserve0: pairData.reserve0,
+            reserve1: pairData.reserve1,
             calculatedPrice: currentPrice.toFixed(8)
           });
         }
@@ -795,7 +772,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
           // Get the pair info to understand token0 vs token1
           const pairInfo = pairData;
 
-          console.log('🔍 Pair info for price calculation:', {
+          logger.debug('🔍 Pair info for price calculation:', {
             pairAddress: pairInfo?.id,
             token0: pairInfo?.token0?.symbol,
             token1: pairInfo?.token1?.symbol,
@@ -815,45 +792,24 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
                 return null; // Skip invalid data
               }
 
-              // Calculate price using NORMALIZED tokens for consistency
-              // This ensures the chart shows the same price regardless of pair flip
-              // Always calculate based on normalizedTokenA (the base token)
-              let price = 0;
-              let calculation = '';
-
-              // Helper to check if two symbols match (handles wrapped native tokens)
-              const symbolsMatch = (symbol1: string | undefined, symbol2: string | undefined): boolean => {
-                if (!symbol1 || !symbol2) return false;
-                if (symbol1 === symbol2) return true;
-                // Handle wrapped native token equivalents (WKLC = KLC, WETH = ETH, etc.)
-                const unwrap = (s: string) => s.startsWith('W') ? s.slice(1) : s;
-                return unwrap(symbol1) === unwrap(symbol2) || symbol1 === unwrap(symbol2) || unwrap(symbol1) === symbol2;
-              };
-
-              if (symbolsMatch(pairInfo?.token0?.symbol, normalizedTokenA?.symbol)) {
-                // normalizedTokenA is token0, so price = reserve1/reserve0 (token1 per token0)
-                price = reserve1 / reserve0;
-                calculation = `${reserve1}/${reserve0} (${normalizedTokenA?.symbol} matches token0: ${pairInfo?.token0?.symbol})`;
-              } else if (symbolsMatch(pairInfo?.token1?.symbol, normalizedTokenA?.symbol)) {
-                // normalizedTokenA is token1, so price = reserve0/reserve1 (token0 per token1)
-                price = reserve0 / reserve1;
-                calculation = `${reserve0}/${reserve1} (${normalizedTokenA?.symbol} matches token1: ${pairInfo?.token1?.symbol})`;
-              } else {
-                // Fallback: assume we want token1 price in token0
-                price = reserve1 / reserve0;
-                calculation = `${reserve1}/${reserve0} (fallback - no symbol match)`;
-              }
+              // Use centralized price calculation utility
+              const tokenAAddress = normalizedTokenA ? getEffectiveAddress(normalizedTokenA) : '';
+              const price = calculatePriceFromReservesRaw(tokenAAddress, {
+                token0: { id: pairInfo?.token0?.id || '' },
+                token1: { id: pairInfo?.token1?.id || '' },
+                reserve0: hour.reserve0,
+                reserve1: hour.reserve1,
+              });
 
               // Log the first calculation for debugging
               if (hourData.indexOf(hour) === 0) {
-                console.log('💰 Price calculation debug (using normalized tokens):', {
+                logger.debug('💰 Price calculation debug (using centralized utility):', {
                   displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
                   normalizedPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
-                  token0: pairInfo?.token0?.symbol,
-                  token1: pairInfo?.token1?.symbol,
+                  tokenAAddress,
+                  token0Address: pairInfo?.token0?.id,
                   reserve0,
                   reserve1,
-                  calculation,
                   finalPrice: price.toFixed(8)
                 });
               }
@@ -880,14 +836,14 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
             }, new Map()).values()
           );
 
-          console.log(`✅ Processed ${deduplicatedData.length} REAL historical price points from subgraph (${historicalData.length - deduplicatedData.length} duplicates removed)`);
-          console.log('📊 Sample data points:', deduplicatedData.slice(0, 3).map(p => ({
+          logger.debug(`✅ Processed ${deduplicatedData.length} REAL historical price points from subgraph (${historicalData.length - deduplicatedData.length} duplicates removed)`);
+          logger.debug('📊 Sample data points:', deduplicatedData.slice(0, 3).map(p => ({
             time: typeof p.time === 'number' ? new Date(p.time * 1000).toISOString().split('T')[0] : 'invalid',
             price: p.close.toFixed(8),
             volume: p.volume.toFixed(2)
           })));
 
-          console.log('📈 SETTING PRICE DATA FROM SUBGRAPH:', {
+          logger.debug('📈 SETTING PRICE DATA FROM SUBGRAPH:', {
             pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
             points: deduplicatedData.length,
             latestPrice: deduplicatedData[deduplicatedData.length - 1]?.close.toFixed(8),
@@ -895,17 +851,17 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
           });
           setPriceData(deduplicatedData);
         } else {
-          console.log('⚠️ No historical data available - subgraph may not be fully synced');
+          logger.debug('⚠️ No historical data available - subgraph may not be fully synced');
           setPriceData([]);
           setError('Chart data not available - subgraph is syncing');
         }
       } else {
-        console.log('⚠️ No data returned from subgraph - pair may not be indexed yet');
+        logger.debug('⚠️ No data returned from subgraph - pair may not be indexed yet');
         setPriceData([]);
         setError('Chart data not available - pair not indexed in subgraph yet');
       }
     } catch (err) {
-      console.error('❌ Error fetching historical price data:', err);
+      logger.error('❌ Error fetching historical price data:', err);
       if (!currentFetch.cancel) {
         setError(err instanceof Error ? err.message : 'Failed to fetch historical data');
         setPriceData([]);
@@ -954,13 +910,13 @@ export function useDexMarketStats(): DexMarketStats {
 
       // Fallback to JsonRpcProvider with proper configuration for ethers v5
       const provider = new ethers.providers.JsonRpcProvider(RPC_URL, {
-        chainId: 3888,
+        chainId: CHAIN_IDS.KALYCHAIN,
         name: 'KalyChain'
       });
 
       return provider;
     } catch (err) {
-      console.error('Failed to create provider:', err);
+      logger.error('Failed to create provider:', err);
       return null;
     }
   }, []);
@@ -974,7 +930,7 @@ export function useDexMarketStats(): DexMarketStats {
       }
       setError(null);
 
-      console.log('🔍 Fetching DEX market stats directly from subgraph...');
+      logger.debug('🔍 Fetching DEX market stats directly from subgraph...');
 
       // Use direct subgraph calls - order by txCount since reserveUSD is 0
       const [factoryData, pairsData, dayData] = await Promise.all([
@@ -983,7 +939,7 @@ export function useDexMarketStats(): DexMarketStats {
         getKalyswapDayData(2, 0)
       ]);
 
-      console.log('📊 Direct subgraph data:', { factoryData, pairsData, dayData });
+      logger.debug('📊 Direct subgraph data:', { factoryData, pairsData, dayData });
 
       if (factoryData && pairsData) {
         const factory = factoryData;
@@ -991,73 +947,86 @@ export function useDexMarketStats(): DexMarketStats {
         const dayDatas = dayData || [];
 
         // Calculate KLC price from WKLC/USDT pairs - no hardcoded fallback
+        // IMPORTANT: Use ADDRESS matching, not symbol matching (symbols are not unique)
+        const WKLC_ADDR = '0x069255299bb729399f3cecabdc73d15d3d10a2a3';
+        const USDT_ADDR = '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a';
+        const WKLC_USDT_PAIR_ADDR = '0x25fddaf836d12dc5e285823a644bb86e0b79c8e2';
+
         let calculatedKlcPrice = 0;
         let totalLiquidityUsd = 0;
 
         if (pairs.length > 0) {
-          // First, try to find the specific WKLC/USDT pair by address
+          // First, try to find the specific WKLC/USDT pair by pair address
           let wklcUsdtPair = pairs.find((pair: any) =>
-            pair.id.toLowerCase() === '0x25fddaf836d12dc5e285823a644bb86e0b79c8e2'
+            pair.id.toLowerCase() === WKLC_USDT_PAIR_ADDR
           );
 
-          // If not found by address, look for any WKLC/USDT pair
+          // If not found by pair address, look by token addresses (NOT symbols)
           if (!wklcUsdtPair) {
-            wklcUsdtPair = pairs.find((pair: any) =>
-              (pair.token0.symbol === 'WKLC' && (pair.token1.symbol === 'USDT')) ||
-              (pair.token1.symbol === 'WKLC' && (pair.token0.symbol === 'USDT'))
-            );
+            wklcUsdtPair = pairs.find((pair: any) => {
+              const t0 = pair.token0?.id?.toLowerCase();
+              const t1 = pair.token1?.id?.toLowerCase();
+              return (t0 === WKLC_ADDR && t1 === USDT_ADDR) || (t1 === WKLC_ADDR && t0 === USDT_ADDR);
+            });
           }
 
           if (wklcUsdtPair) {
             const reserve0 = parseFloat(wklcUsdtPair.reserve0);
             const reserve1 = parseFloat(wklcUsdtPair.reserve1);
+            const token0Addr = wklcUsdtPair.token0?.id?.toLowerCase();
 
-            if (wklcUsdtPair.token0.symbol === 'WKLC') {
+            // Use ADDRESS to determine which token is WKLC
+            if (token0Addr === WKLC_ADDR) {
               // WKLC is token0, USDT is token1
               calculatedKlcPrice = reserve1 / reserve0;
-              console.log(`💰 KLC price from ${wklcUsdtPair.token0.symbol}/${wklcUsdtPair.token1.symbol}: $${calculatedKlcPrice.toFixed(6)} (${reserve1} USDT / ${reserve0} WKLC)`);
-            } else if (wklcUsdtPair.token1.symbol === 'WKLC') {
+              logger.debug(`💰 KLC price: $${calculatedKlcPrice.toFixed(6)} (${reserve1} USDT / ${reserve0} WKLC)`);
+            } else {
               // USDT is token0, WKLC is token1
               calculatedKlcPrice = reserve0 / reserve1;
-              console.log(`💰 KLC price from ${wklcUsdtPair.token0.symbol}/${wklcUsdtPair.token1.symbol}: $${calculatedKlcPrice.toFixed(6)} (${reserve0} USDT / ${reserve1} WKLC)`);
+              logger.debug(`💰 KLC price: $${calculatedKlcPrice.toFixed(6)} (${reserve0} USDT / ${reserve1} WKLC)`);
             }
           } else {
-            console.log('⚠️ WKLC/USDT pair not found in top pairs, using fallback price');
+            logger.debug('⚠️ WKLC/USDT pair not found in top pairs, using fallback price');
           }
 
-          // Calculate total liquidity manually since reserveUSD is 0
+          // Calculate total liquidity manually using ADDRESS matching
           totalLiquidityUsd = pairs.reduce((sum: number, pair: any) => {
             let pairLiquidityUsd = 0;
 
-            // Calculate USD value based on token types
             const reserve0 = parseFloat(pair.reserve0 || '0');
             const reserve1 = parseFloat(pair.reserve1 || '0');
+            const token0Addr = pair.token0?.id?.toLowerCase() || '';
+            const token1Addr = pair.token1?.id?.toLowerCase() || '';
 
-            // Calculate USD value more accurately
-            if (pair.token0.symbol === 'USDT') {
-              // Token0 is USDT - total liquidity = USDT reserve + (other token reserve * other token price)
-              const otherTokenValueUsd = pair.token1.symbol === 'WKLC' ? reserve1 * calculatedKlcPrice : 0;
+            const isToken0Stable = isStablecoinAddress(token0Addr);
+            const isToken1Stable = isStablecoinAddress(token1Addr);
+            const isToken0Wklc = token0Addr === WKLC_ADDR;
+            const isToken1Wklc = token1Addr === WKLC_ADDR;
+
+            if (isToken0Stable) {
+              // Token0 is stablecoin - count its reserve + WKLC value if present
+              const otherTokenValueUsd = isToken1Wklc ? reserve1 * calculatedKlcPrice : 0;
               pairLiquidityUsd = reserve0 + otherTokenValueUsd;
-            } else if (pair.token1.symbol === 'USDT') {
-              // Token1 is USDT - total liquidity = USDT reserve + (other token reserve * other token price)
-              const otherTokenValueUsd = pair.token0.symbol === 'WKLC' ? reserve0 * calculatedKlcPrice : 0;
+            } else if (isToken1Stable) {
+              // Token1 is stablecoin - count its reserve + WKLC value if present
+              const otherTokenValueUsd = isToken0Wklc ? reserve0 * calculatedKlcPrice : 0;
               pairLiquidityUsd = reserve1 + otherTokenValueUsd;
-            } else if (pair.token0.symbol === 'WKLC' && pair.token1.symbol === 'WKLC') {
+            } else if (isToken0Wklc && isToken1Wklc) {
               // Both tokens are WKLC (shouldn't happen, but just in case)
               pairLiquidityUsd = (reserve0 + reserve1) * calculatedKlcPrice;
-            } else if (pair.token0.symbol === 'WKLC') {
+            } else if (isToken0Wklc) {
               // Token0 is WKLC, token1 is unknown - only count WKLC value
               pairLiquidityUsd = reserve0 * calculatedKlcPrice;
-            } else if (pair.token1.symbol === 'WKLC') {
+            } else if (isToken1Wklc) {
               // Token1 is WKLC, token0 is unknown - only count WKLC value
               pairLiquidityUsd = reserve1 * calculatedKlcPrice;
             }
 
-            console.log(`💰 Pair ${pair.token0.symbol}/${pair.token1.symbol}: $${pairLiquidityUsd.toLocaleString()} (${reserve0.toFixed(2)} ${pair.token0.symbol} + ${reserve1.toFixed(2)} ${pair.token1.symbol})`);
+            logger.debug(`💰 Pair ${pair.token0.symbol}/${pair.token1.symbol}: $${pairLiquidityUsd.toLocaleString()}`);
             return sum + pairLiquidityUsd;
           }, 0);
 
-          console.log(`💰 Total calculated liquidity from pairs: $${totalLiquidityUsd.toLocaleString()}`);
+          logger.debug(`💰 Total calculated liquidity from pairs: $${totalLiquidityUsd.toLocaleString()}`);
         }
 
         // Calculate 24h volume and change
@@ -1069,7 +1038,7 @@ export function useDexMarketStats(): DexMarketStats {
           const yesterday = dayDatas[1];
 
           volume24h = parseFloat(today.dailyVolumeUSD || '0');
-          console.log(`📊 24h Volume from subgraph: $${volume24h}`);
+          logger.debug(`📊 24h Volume from subgraph: $${volume24h}`);
 
           // Calculate price change (simplified)
           if (yesterday.totalLiquidityUSD && today.totalLiquidityUSD) {
@@ -1080,12 +1049,12 @@ export function useDexMarketStats(): DexMarketStats {
         }
 
         // Use factory total liquidity if available and non-zero
-        console.log(`🏭 Factory liquidity: ${factory?.totalLiquidityUSD || 'null'}`);
+        logger.debug(`🏭 Factory liquidity: ${factory?.totalLiquidityUSD || 'null'}`);
         if (factory?.totalLiquidityUSD && parseFloat(factory.totalLiquidityUSD) > 0) {
-          console.log(`🏭 Using factory liquidity: $${parseFloat(factory.totalLiquidityUSD).toLocaleString()}`);
+          logger.debug(`🏭 Using factory liquidity: $${parseFloat(factory.totalLiquidityUSD).toLocaleString()}`);
           totalLiquidityUsd = parseFloat(factory.totalLiquidityUSD);
         } else {
-          console.log(`🏭 Factory liquidity is 0 or missing, using calculated sum: $${totalLiquidityUsd.toLocaleString()}`);
+          logger.debug(`🏭 Factory liquidity is 0 or missing, using calculated sum: $${totalLiquidityUsd.toLocaleString()}`);
         }
         // Otherwise, use the sum from individual pairs (calculated above)
 
@@ -1095,7 +1064,7 @@ export function useDexMarketStats(): DexMarketStats {
         setPriceChange24h(priceChange24h);
         setVolume24h(volume24h);
 
-        console.log('✅ DEX stats updated:', {
+        logger.debug('✅ DEX stats updated:', {
           klcPrice: calculatedKlcPrice,
           totalLiquidity: totalLiquidityUsd,
           volume24h,
@@ -1107,7 +1076,7 @@ export function useDexMarketStats(): DexMarketStats {
       }
 
     } catch (err) {
-      console.error('❌ Error fetching DEX data from subgraph:', err);
+      logger.error('❌ Error fetching DEX data from subgraph:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch DEX data');
 
       // Fallback to default values

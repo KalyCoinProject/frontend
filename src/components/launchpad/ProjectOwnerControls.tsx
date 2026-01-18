@@ -19,6 +19,7 @@ import { useAccount, useWalletClient } from 'wagmi'
 import { encodeFunctionData } from 'viem'
 import { PRESALE_ABI, FAIRLAUNCH_ABI } from '@/config/abis'
 import { internalWalletUtils } from '@/connectors/internalWallet'
+import { launchpadLogger } from '@/lib/logger'
 
 interface ProjectOwnerControlsProps {
   projectData: ProjectData
@@ -152,7 +153,7 @@ export default function ProjectOwnerControls({
         []
       )
 
-      console.log('Finalize transaction hash:', hash)
+      launchpadLogger.debug('Finalize transaction hash:', hash)
 
       // Wait a moment for transaction to be mined, then refresh
       setTimeout(() => {
@@ -160,7 +161,7 @@ export default function ProjectOwnerControls({
       }, 3000)
 
     } catch (error) {
-      console.error('Finalize failed:', error)
+      launchpadLogger.error('Finalize failed:', error)
       alert(`Finalize failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)
@@ -173,12 +174,12 @@ export default function ProjectOwnerControls({
     setLoadingAction('cancel')
     try {
       // TODO: Implement cancel contract call
-      console.log('Cancelling project:', projectData.contractAddress)
+      launchpadLogger.debug('Cancelling project:', projectData.contractAddress)
       // Placeholder for actual implementation
       await new Promise(resolve => setTimeout(resolve, 2000))
       onRefresh()
     } catch (error) {
-      console.error('Cancel failed:', error)
+      launchpadLogger.error('Cancel failed:', error)
     } finally {
       setIsLoading(false)
       setLoadingAction(null)
@@ -204,7 +205,7 @@ export default function ProjectOwnerControls({
         []
       )
 
-      console.log('Withdraw funds transaction hash:', hash)
+      launchpadLogger.debug('Withdraw funds transaction hash:', hash)
 
       // Wait a moment for transaction to be mined, then refresh
       setTimeout(() => {
@@ -212,7 +213,7 @@ export default function ProjectOwnerControls({
       }, 3000)
 
     } catch (error) {
-      console.error('Withdraw failed:', error)
+      launchpadLogger.error('Withdraw failed:', error)
       alert(`Withdraw failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)
@@ -237,7 +238,7 @@ export default function ProjectOwnerControls({
         []
       )
 
-      console.log('Withdraw LP tokens transaction hash:', hash)
+      launchpadLogger.debug('Withdraw LP tokens transaction hash:', hash)
 
       // Wait a moment for transaction to be mined, then refresh
       setTimeout(() => {
@@ -245,7 +246,7 @@ export default function ProjectOwnerControls({
       }, 3000)
 
     } catch (error) {
-      console.error('Withdraw LP failed:', error)
+      launchpadLogger.error('Withdraw LP failed:', error)
       alert(`Withdraw LP failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)

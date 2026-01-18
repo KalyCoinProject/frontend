@@ -29,7 +29,10 @@ export type {
   PairInfo,
   DexConfig,
   DexProtocol,
-  SupportedDexChainId
+  SupportedDexChainId,
+  AddLiquidityParams,
+  RemoveLiquidityParams,
+  LiquidityPosition
 } from '@/config/dex/types';
 
 // Convenience functions

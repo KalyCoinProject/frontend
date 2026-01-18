@@ -1,3 +1,4 @@
+import { dexLogger } from '@/lib/logger';
 // PancakeSwap DEX service implementation
 // Handles all PancakeSwap-specific operations on BSC
 
@@ -52,7 +53,7 @@ export class PancakeSwapService extends BaseDexService {
   async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<QuoteResult> {
     // Check if this is a wrap or unwrap operation
     if (this.isWrapOperation(tokenIn, tokenOut) || this.isUnwrapOperation(tokenIn, tokenOut)) {
-      console.log('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
+      dexLogger.debug('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
 
       return {
         amountOut: amountIn, // 1:1 ratio
@@ -88,7 +89,7 @@ export class PancakeSwapService extends BaseDexService {
 
       if (isWrap) {
         // BNB → WBNB: Call deposit() with BNB value
-        console.log('🔄 Wrapping BNB to WBNB via WBNB contract...');
+        dexLogger.debug('🔄 Wrapping BNB to WBNB via WBNB contract...');
 
         // WBNB ABI for deposit function
         const WBNB_ABI = [
@@ -111,12 +112,12 @@ export class PancakeSwapService extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Wrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Wrap transaction sent: ${txHash}`);
         return txHash;
 
       } else if (isUnwrap) {
         // WBNB → BNB: Call withdraw()
-        console.log('🔄 Unwrapping WBNB to BNB via WBNB contract...');
+        dexLogger.debug('🔄 Unwrapping WBNB to BNB via WBNB contract...');
 
         // WBNB ABI for withdraw function
         const WBNB_ABI = [
@@ -144,7 +145,7 @@ export class PancakeSwapService extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Unwrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Unwrap transaction sent: ${txHash}`);
         return txHash;
       }
 
@@ -213,7 +214,7 @@ export class PancakeSwapService extends BaseDexService {
 
       return txHash;
     } catch (error) {
-      console.error('PancakeSwap executeSwap error:', error);
+      dexLogger.error('PancakeSwap executeSwap error:', error);
       if (error instanceof DexError) {
         throw error;
       }
@@ -249,7 +250,7 @@ export class PancakeSwapService extends BaseDexService {
 
       return usdtReserve / bnbReserve;
     } catch (error) {
-      console.error('Error getting BNB price:', error);
+      dexLogger.error('Error getting BNB price:', error);
       return 0;
     }
   }
@@ -285,7 +286,7 @@ export class PancakeSwapService extends BaseDexService {
 
       return cakePriceInBNB * bnbPriceUSD;
     } catch (error) {
-      console.error('Error getting CAKE price:', error);
+      dexLogger.error('Error getting CAKE price:', error);
       return 0;
     }
   }

@@ -3,6 +3,7 @@
 import { parseUnits, formatUnits, getContract, PublicClient } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { FACTORY_ABI, PAIR_ABI } from '@/config/abis';
+import { contractLogger } from '@/lib/logger';
 
 interface Token {
   address: string;
@@ -42,7 +43,7 @@ export async function getPairAddress(
     const dexConfig = getDexConfig(chainId);
 
     if (!dexConfig) {
-      console.log(`⚠️ getPairAddress: Chain ${chainId} not supported for DEX operations`);
+      contractLogger.debug(`⚠️ getPairAddress: Chain ${chainId} not supported for DEX operations`);
       return null;
     }
 
@@ -65,7 +66,7 @@ export async function getPairAddress(
 
     return pairAddress as string;
   } catch (error) {
-    console.error('Error getting pair address:', error);
+    contractLogger.error('Error getting pair address:', error);
     return null;
   }
 }
@@ -98,7 +99,7 @@ export async function getPairReserves(
       token1: (token1 as string).toLowerCase(),
     };
   } catch (error) {
-    console.error('Error getting pair reserves:', error);
+    contractLogger.error('Error getting pair reserves:', error);
     return null;
   }
 }
@@ -137,7 +138,7 @@ export function calculatePriceImpactFromReserves(
 
     return priceImpact.toFixed(4);
   } catch (error) {
-    console.error('Error calculating price impact:', error);
+    contractLogger.error('Error calculating price impact:', error);
     return '0';
   }
 }
@@ -255,7 +256,7 @@ export async function calculatePriceImpact(
     return getPriceImpactSeverity(priceImpact);
 
   } catch (error) {
-    console.error('Error calculating price impact:', error);
+    contractLogger.error('Error calculating price impact:', error);
     return {
       priceImpact: '0',
       severity: 'low',

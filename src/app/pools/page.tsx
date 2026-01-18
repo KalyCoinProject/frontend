@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import { useState, useEffect } from 'react';
 import './pools.css';
 import MainLayout from '@/components/layout/MainLayout';
@@ -9,16 +11,7 @@ import { ArrowLeft, Info, Search } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TokenSelector from '@/components/pools/TokenSelector';
 import LiquidityForm from '@/components/pools/LiquidityForm';
-
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  balance?: string;
-}
+import { Token } from '@/config/dex/types';
 
 export default function PoolsPage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -51,7 +44,7 @@ export default function PoolsPage() {
 
     if (tokenAAddress && tokenASymbol) {
       const tokenA: Token = {
-        chainId: 3888,
+        chainId: CHAIN_IDS.KALYCHAIN,
         address: tokenAAddress,
         decimals: getTokenDecimals(tokenAAddress),
         name: tokenASymbol,
@@ -63,7 +56,7 @@ export default function PoolsPage() {
 
     if (tokenBAddress && tokenBSymbol) {
       const tokenB: Token = {
-        chainId: 3888,
+        chainId: CHAIN_IDS.KALYCHAIN,
         address: tokenBAddress,
         decimals: getTokenDecimals(tokenBAddress),
         name: tokenBSymbol,

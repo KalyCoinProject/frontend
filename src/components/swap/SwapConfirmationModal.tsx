@@ -4,16 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, AlertTriangle, Info } from 'lucide-react';
-
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
+import { Token } from '@/config/dex/types';
 
 interface SwapConfirmationModalProps {
   isOpen: boolean;

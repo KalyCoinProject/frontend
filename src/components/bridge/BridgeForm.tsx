@@ -3,6 +3,8 @@
 
 'use client';
 
+import { bridgeLogger } from '@/lib/logger';
+
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -132,7 +134,7 @@ export function BridgeForm() {
           resetForm();
           form.reset();
         } catch (error) {
-          console.error('Transfer failed:', error);
+          bridgeLogger.error('Transfer failed:', error);
           setIsReview(false);
         }
       }

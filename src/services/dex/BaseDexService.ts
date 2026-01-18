@@ -1,10 +1,79 @@
+import { dexLogger } from '@/lib/logger';
 // Base DEX service with common functionality
 // This provides shared logic for all DEX implementations
 
-import { IDexService, DexError, PairNotFoundError, UnsupportedTokenError } from './IDexService';
-import { Token, QuoteResult, SwapParams, PairInfo, DexConfig } from '@/config/dex/types';
-import { getContract, parseUnits, formatUnits } from 'viem';
+import { IDexService, DexError, PairNotFoundError, SwapFailedError } from './IDexService';
+import { Token, QuoteResult, SwapParams, PairInfo, DexConfig, AddLiquidityParams, RemoveLiquidityParams, LiquidityPosition } from '@/config/dex/types';
+import { getContract, parseUnits, formatUnits, maxUint256 } from 'viem';
 import type { PublicClient, WalletClient } from 'viem';
+
+// ERC20 ABI for token approvals
+const ERC20_ABI = [
+  {
+    "inputs": [{"name": "spender", "type": "address"}, {"name": "amount", "type": "uint256"}],
+    "name": "approve",
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "owner", "type": "address"}, {"name": "spender", "type": "address"}],
+    "name": "allowance",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "account", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+// Pair ABI for liquidity operations
+const PAIR_ABI = [
+  {
+    "inputs": [],
+    "name": "getReserves",
+    "outputs": [
+      {"internalType": "uint112", "name": "_reserve0", "type": "uint112"},
+      {"internalType": "uint112", "name": "_reserve1", "type": "uint112"},
+      {"internalType": "uint32", "name": "_blockTimestampLast", "type": "uint32"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "token0",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "token1",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"name": "account", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
 
 export abstract class BaseDexService implements IDexService {
   protected config: DexConfig;
@@ -68,7 +137,7 @@ export abstract class BaseDexService implements IDexService {
       }
 
       // Debug logging
-      console.log(`[${this.getName()}] Quote Debug:`, {
+      dexLogger.debug(`[${this.getName()}] Quote Debug:`, {
         tokenIn: `${tokenIn.symbol} (${tokenIn.address}) decimals: ${tokenIn.decimals}`,
         tokenOut: `${tokenOut.symbol} (${tokenOut.address}) decimals: ${tokenOut.decimals}`,
         amountIn,
@@ -97,7 +166,7 @@ export abstract class BaseDexService implements IDexService {
       const amountOut = amounts[amounts.length - 1];
 
       // Debug logging for amounts
-      console.log(`[${this.getName()}] Quote Amounts:`, {
+      dexLogger.debug(`[${this.getName()}] Quote Amounts:`, {
         amountInWei: amountInWei.toString(),
         amounts: amounts.map((a, i) => `${i}: ${a.toString()}`),
         amountOut: amountOut.toString(),
@@ -117,7 +186,7 @@ export abstract class BaseDexService implements IDexService {
         gasEstimate: '200000', // Default gas estimate
       };
     } catch (error) {
-      console.error('Quote error:', error);
+      dexLogger.error('Quote error:', error);
       if (error instanceof DexError) {
         throw error;
       }
@@ -154,7 +223,7 @@ export abstract class BaseDexService implements IDexService {
 
       return pairAddress;
     } catch (error) {
-      console.error('Get pair address error:', error);
+      dexLogger.error('Get pair address error:', error);
       return null;
     }
   }
@@ -211,7 +280,7 @@ export abstract class BaseDexService implements IDexService {
         totalSupply: totalSupply.toString(),
       };
     } catch (error) {
-      console.error('Get pair info error:', error);
+      dexLogger.error('Get pair info error:', error);
       return null;
     }
   }
@@ -270,7 +339,7 @@ export abstract class BaseDexService implements IDexService {
       const priceImpact = (amountInValue / (reserveInFormatted + amountInValue)) * 100;
       return Math.min(priceImpact, 100); // Cap at 100%
     } catch (error) {
-      console.error('Price impact calculation error:', error);
+      dexLogger.error('Price impact calculation error:', error);
       return 0;
     }
   }
@@ -311,5 +380,292 @@ export abstract class BaseDexService implements IDexService {
   async canSwapDirectly(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<boolean> {
     const pairAddress = await this.getPairAddress(tokenA, tokenB, publicClient);
     return pairAddress !== null;
+  }
+
+  // ===============================
+  // Liquidity Operations
+  // ===============================
+
+  /**
+   * Add liquidity to a token pair
+   */
+  async addLiquidity(
+    params: AddLiquidityParams,
+    publicClient: PublicClient,
+    walletClient: WalletClient
+  ): Promise<string> {
+    try {
+      const { tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline } = params;
+
+      const routerAddress = this.getRouterAddress();
+      const wethAddress = this.getWethAddress();
+
+      // Convert amounts to proper units
+      const amountADesiredWei = parseUnits(amountADesired, tokenA.decimals);
+      const amountBDesiredWei = parseUnits(amountBDesired, tokenB.decimals);
+      const amountAMinWei = parseUnits(amountAMin, tokenA.decimals);
+      const amountBMinWei = parseUnits(amountBMin, tokenB.decimals);
+      const deadlineBigInt = BigInt(deadline);
+
+      // Check if either token is native
+      const isTokenANative = tokenA.isNative === true;
+      const isTokenBNative = tokenB.isNative === true;
+
+      const account = walletClient.account;
+      if (!account) {
+        throw new SwapFailedError(this.getName(), 'No account connected');
+      }
+
+      let hash: `0x${string}`;
+
+      if (isTokenANative || isTokenBNative) {
+        // Use addLiquidityKLC/addLiquidityETH
+        const token = isTokenANative ? tokenB : tokenA;
+        const tokenAmount = isTokenANative ? amountBDesiredWei : amountADesiredWei;
+        const tokenAmountMin = isTokenANative ? amountBMinWei : amountAMinWei;
+        const nativeAmount = isTokenANative ? amountADesiredWei : amountBDesiredWei;
+        const nativeAmountMin = isTokenANative ? amountAMinWei : amountBMinWei;
+
+        hash = await walletClient.writeContract({
+          address: routerAddress as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'addLiquidityKLC',
+          args: [token.address, tokenAmount, tokenAmountMin, nativeAmountMin, to, deadlineBigInt],
+          value: nativeAmount,
+          account,
+          chain: walletClient.chain,
+        });
+      } else {
+        // Use addLiquidity for token-token pairs
+        hash = await walletClient.writeContract({
+          address: routerAddress as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'addLiquidity',
+          args: [
+            tokenA.address,
+            tokenB.address,
+            amountADesiredWei,
+            amountBDesiredWei,
+            amountAMinWei,
+            amountBMinWei,
+            to,
+            deadlineBigInt
+          ],
+          account,
+          chain: walletClient.chain,
+        });
+      }
+
+      // Wait for transaction
+      await publicClient.waitForTransactionReceipt({ hash });
+      return hash;
+    } catch (error) {
+      dexLogger.error('Add liquidity error:', error);
+      throw new SwapFailedError(this.getName(), `Add liquidity failed: ${error}`);
+    }
+  }
+
+  /**
+   * Remove liquidity from a token pair
+   */
+  async removeLiquidity(
+    params: RemoveLiquidityParams,
+    publicClient: PublicClient,
+    walletClient: WalletClient
+  ): Promise<string> {
+    try {
+      const { tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline } = params;
+
+      const routerAddress = this.getRouterAddress();
+      const wethAddress = this.getWethAddress();
+
+      // Convert amounts to proper units
+      const liquidityWei = parseUnits(liquidity, 18); // LP tokens are always 18 decimals
+      const amountAMinWei = parseUnits(amountAMin, tokenA.decimals);
+      const amountBMinWei = parseUnits(amountBMin, tokenB.decimals);
+      const deadlineBigInt = BigInt(deadline);
+
+      const account = walletClient.account;
+      if (!account) {
+        throw new SwapFailedError(this.getName(), 'No account connected');
+      }
+
+      // Determine if this is a native token pair
+      const addressA = tokenA.isNative ? wethAddress : tokenA.address;
+      const addressB = tokenB.isNative ? wethAddress : tokenB.address;
+      const isNativePair = addressA === wethAddress || addressB === wethAddress;
+
+      let hash: `0x${string}`;
+
+      if (isNativePair) {
+        // Use removeLiquidityKLC/removeLiquidityETH
+        const token = addressA === wethAddress ? tokenB : tokenA;
+        const tokenAmountMin = addressA === wethAddress ? amountBMinWei : amountAMinWei;
+        const nativeAmountMin = addressA === wethAddress ? amountAMinWei : amountBMinWei;
+
+        hash = await walletClient.writeContract({
+          address: routerAddress as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'removeLiquidityKLC',
+          args: [token.address, liquidityWei, tokenAmountMin, nativeAmountMin, to, deadlineBigInt],
+          account,
+          chain: walletClient.chain,
+        });
+      } else {
+        // Use removeLiquidity for token-token pairs
+        hash = await walletClient.writeContract({
+          address: routerAddress as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'removeLiquidity',
+          args: [
+            tokenA.address,
+            tokenB.address,
+            liquidityWei,
+            amountAMinWei,
+            amountBMinWei,
+            to,
+            deadlineBigInt
+          ],
+          account,
+          chain: walletClient.chain,
+        });
+      }
+
+      // Wait for transaction
+      await publicClient.waitForTransactionReceipt({ hash });
+      return hash;
+    } catch (error) {
+      dexLogger.error('Remove liquidity error:', error);
+      throw new SwapFailedError(this.getName(), `Remove liquidity failed: ${error}`);
+    }
+  }
+
+  /**
+   * Get user's liquidity positions
+   * Note: This is a basic implementation. For full functionality, use subgraph queries.
+   */
+  async getUserLiquidityPositions(
+    _userAddress: string,
+    _publicClient: PublicClient
+  ): Promise<LiquidityPosition[]> {
+    // This would require iterating over all pairs or using a subgraph
+    // For now, return empty array - callers should use subgraph for this
+    dexLogger.warn('[DexService] getUserLiquidityPositions: Use subgraph for full functionality');
+    return [];
+  }
+
+  /**
+   * Calculate optimal amounts for adding liquidity based on current reserves
+   */
+  async calculateOptimalLiquidityAmounts(
+    tokenA: Token,
+    tokenB: Token,
+    amountA: string,
+    publicClient: PublicClient
+  ): Promise<{ amountB: string; isNewPair: boolean }> {
+    try {
+      const pairInfo = await this.getPairInfo(tokenA, tokenB, publicClient);
+
+      if (!pairInfo) {
+        // New pair - any ratio is valid
+        return { amountB: amountA, isNewPair: true };
+      }
+
+      const reserve0 = BigInt(pairInfo.reserve0);
+      const reserve1 = BigInt(pairInfo.reserve1);
+
+      if (reserve0 === 0n || reserve1 === 0n) {
+        return { amountB: amountA, isNewPair: true };
+      }
+
+      // Determine if tokenA is token0 or token1
+      const addressA = tokenA.isNative ? this.getWethAddress() : tokenA.address;
+      const isTokenAToken0 = pairInfo.token0.address.toLowerCase() === addressA.toLowerCase();
+
+      const reserveA = isTokenAToken0 ? reserve0 : reserve1;
+      const reserveB = isTokenAToken0 ? reserve1 : reserve0;
+
+      // Calculate optimal amountB
+      const amountAWei = parseUnits(amountA, tokenA.decimals);
+      const optimalAmountBWei = (amountAWei * reserveB) / reserveA;
+      const amountB = formatUnits(optimalAmountBWei, tokenB.decimals);
+
+      return { amountB, isNewPair: false };
+    } catch (error) {
+      dexLogger.error('Calculate optimal amounts error:', error);
+      return { amountB: amountA, isNewPair: true };
+    }
+  }
+
+  /**
+   * Approve token for router spending
+   */
+  async approveToken(
+    token: Token,
+    amount: string,
+    walletClient: WalletClient
+  ): Promise<string> {
+    try {
+      if (token.isNative) {
+        throw new DexError('Cannot approve native token', 'INVALID_OPERATION', this.getName());
+      }
+
+      const account = walletClient.account;
+      if (!account) {
+        throw new SwapFailedError(this.getName(), 'No account connected');
+      }
+
+      const routerAddress = this.getRouterAddress();
+      const approveAmount = amount === 'max' ? maxUint256 : parseUnits(amount, token.decimals);
+
+      const hash = await walletClient.writeContract({
+        address: token.address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [routerAddress as `0x${string}`, approveAmount],
+        account,
+        chain: walletClient.chain,
+      });
+
+      return hash;
+    } catch (error) {
+      dexLogger.error('Approve token error:', error);
+      throw new SwapFailedError(this.getName(), `Approve failed: ${error}`);
+    }
+  }
+
+  /**
+   * Check token approval status
+   */
+  async checkApproval(
+    token: Token,
+    owner: string,
+    amount: string,
+    publicClient: PublicClient
+  ): Promise<boolean> {
+    try {
+      if (token.isNative) {
+        return true; // Native tokens don't need approval
+      }
+
+      const routerAddress = this.getRouterAddress();
+      const requiredAmount = parseUnits(amount, token.decimals);
+
+      const tokenContract = getContract({
+        address: token.address as `0x${string}`,
+        abi: ERC20_ABI,
+        client: publicClient,
+      });
+
+      const allowance = await tokenContract.read.allowance([
+        owner as `0x${string}`,
+        routerAddress as `0x${string}`
+      ]) as bigint;
+
+      return allowance >= requiredAmount;
+    } catch (error) {
+      dexLogger.error('Check approval error:', error);
+      return false;
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { subgraphLogger } from '@/lib/logger';
 /**
  * GeckoTerminal API Client
  * Free DEX data API by CoinGecko for OHLC chart data
@@ -31,7 +32,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
   // Check cache first
   const cached = cache.get(url);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`📦 GeckoTerminal: Using cached data for ${url}`);
+    subgraphLogger.debug(`📦 GeckoTerminal: Using cached data for ${url}`);
     return cached.data;
   }
 
@@ -41,7 +42,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
 
   if (timeSinceLastCall < RATE_LIMIT_DELAY) {
     const waitTime = RATE_LIMIT_DELAY - timeSinceLastCall;
-    console.log(`⏳ GeckoTerminal: Rate limiting, waiting ${waitTime}ms`);
+    subgraphLogger.debug(`⏳ GeckoTerminal: Rate limiting, waiting ${waitTime}ms`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
   }
 
@@ -57,7 +58,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
     if (!response.ok) {
       // 404 means pool not found - this is expected for many token pairs
       if (response.status === 404) {
-        console.log(`⚠️ GeckoTerminal: Pool not found (404) - this pair may not have liquidity on this DEX`);
+        subgraphLogger.debug(`⚠️ GeckoTerminal: Pool not found (404) - this pair may not have liquidity on this DEX`);
         return null; // Return null instead of throwing
       }
       throw new Error(`GeckoTerminal API error: ${response.status} ${response.statusText}`);
@@ -75,7 +76,7 @@ async function rateLimitedFetch(url: string): Promise<any> {
   } catch (error) {
     // Only log non-404 errors as actual errors
     if (error instanceof Error && !error.message.includes('404')) {
-      console.error('❌ GeckoTerminal API error:', error);
+      subgraphLogger.error('❌ GeckoTerminal API error:', error);
     }
     throw error;
   }
@@ -101,7 +102,7 @@ export async function findPoolAddress(
   try {
     const networkId = getNetworkId(chainId);
     if (!networkId) {
-      console.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
+      subgraphLogger.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
       return null;
     }
 
@@ -121,7 +122,7 @@ export async function findPoolAddress(
     const tokenAAddr = getWrappedAddress(tokenA).toLowerCase();
     const tokenBAddr = getWrappedAddress(tokenB).toLowerCase();
 
-    console.log(`🔍 GeckoTerminal: Searching for ${tokenA.symbol}/${tokenB.symbol} pair`, {
+    subgraphLogger.debug(`🔍 GeckoTerminal: Searching for ${tokenA.symbol}/${tokenB.symbol} pair`, {
       tokenA: { symbol: tokenA.symbol, address: tokenAAddr },
       tokenB: { symbol: tokenB.symbol, address: tokenBAddr }
     });
@@ -129,15 +130,15 @@ export async function findPoolAddress(
     // Helper function to search pools for a specific token address
     const searchTokenPools = async (tokenAddr: string, otherTokenAddr: string, tokenSymbol: string): Promise<string | null> => {
       const url = `${GECKOTERMINAL_API_BASE}/networks/${networkId}/tokens/${tokenAddr}/pools`;
-      console.log(`🔍 GeckoTerminal: Fetching pools from ${url}`);
+      subgraphLogger.debug(`🔍 GeckoTerminal: Fetching pools from ${url}`);
       const response = await rateLimitedFetch(url);
 
       if (!response?.data || !Array.isArray(response.data)) {
-        console.log(`⚠️ GeckoTerminal: No pools data returned for ${tokenSymbol}`);
+        subgraphLogger.debug(`⚠️ GeckoTerminal: No pools data returned for ${tokenSymbol}`);
         return null;
       }
 
-      console.log(`📋 GeckoTerminal: Found ${response.data.length} pools for ${tokenSymbol}`);
+      subgraphLogger.debug(`📋 GeckoTerminal: Found ${response.data.length} pools for ${tokenSymbol}`);
 
       // Find a pool that contains both tokens
       for (const pool of response.data) {
@@ -150,7 +151,7 @@ export async function findPoolAddress(
         ) {
           const poolAddress = pool.id?.split('_')[1];
           if (poolAddress) {
-            console.log(`✅ GeckoTerminal: Found pool ${poolAddress} for ${tokenA.symbol}/${tokenB.symbol}`);
+            subgraphLogger.debug(`✅ GeckoTerminal: Found pool ${poolAddress} for ${tokenA.symbol}/${tokenB.symbol}`);
             return poolAddress;
           }
         }
@@ -160,7 +161,7 @@ export async function findPoolAddress(
     };
 
     // Try searching tokenA's pools first
-    console.log(`🔍 GeckoTerminal: Searching ${tokenA.symbol} pools for ${tokenA.symbol}/${tokenB.symbol} pair...`);
+    subgraphLogger.debug(`🔍 GeckoTerminal: Searching ${tokenA.symbol} pools for ${tokenA.symbol}/${tokenB.symbol} pair...`);
     let poolAddress = await searchTokenPools(tokenAAddr, tokenBAddr, tokenA.symbol);
 
     if (poolAddress) {
@@ -168,17 +169,17 @@ export async function findPoolAddress(
     }
 
     // If not found, try searching tokenB's pools
-    console.log(`🔍 GeckoTerminal: Searching ${tokenB.symbol} pools for ${tokenA.symbol}/${tokenB.symbol} pair...`);
+    subgraphLogger.debug(`🔍 GeckoTerminal: Searching ${tokenB.symbol} pools for ${tokenA.symbol}/${tokenB.symbol} pair...`);
     poolAddress = await searchTokenPools(tokenBAddr, tokenAAddr, tokenB.symbol);
 
     if (poolAddress) {
       return poolAddress;
     }
 
-    console.warn(`⚠️ GeckoTerminal: No pool found for ${tokenA.symbol}/${tokenB.symbol} after searching both tokens`);
+    subgraphLogger.warn(`⚠️ GeckoTerminal: No pool found for ${tokenA.symbol}/${tokenB.symbol} after searching both tokens`);
     return null;
   } catch (error) {
-    console.error(`❌ GeckoTerminal: Error finding pool for ${tokenA.symbol}/${tokenB.symbol}:`, error);
+    subgraphLogger.error(`❌ GeckoTerminal: Error finding pool for ${tokenA.symbol}/${tokenB.symbol}:`, error);
     return null;
   }
 }
@@ -201,27 +202,27 @@ export async function getGeckoTerminalOHLC(
   try {
     const networkId = getNetworkId(chainId);
     if (!networkId) {
-      console.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
+      subgraphLogger.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
       return [];
     }
 
     const url = `${GECKOTERMINAL_API_BASE}/networks/${networkId}/pools/${poolAddress.toLowerCase()}/ohlcv/${timeframe}?aggregate=${aggregate}&limit=${limit}`;
     
-    console.log(`🦎 GeckoTerminal: Fetching OHLC data from ${url}`);
+    subgraphLogger.debug(`🦎 GeckoTerminal: Fetching OHLC data from ${url}`);
     
     const response = await rateLimitedFetch(url);
 
     if (!response?.data?.attributes?.ohlcv_list || !Array.isArray(response.data.attributes.ohlcv_list)) {
-      console.warn('⚠️ GeckoTerminal: Invalid OHLC response format');
+      subgraphLogger.warn('⚠️ GeckoTerminal: Invalid OHLC response format');
       return [];
     }
 
     const ohlcvList = response.data.attributes.ohlcv_list;
-    console.log(`✅ GeckoTerminal: Fetched ${ohlcvList.length} OHLC candles`);
+    subgraphLogger.debug(`✅ GeckoTerminal: Fetched ${ohlcvList.length} OHLC candles`);
 
     return ohlcvList;
   } catch (error) {
-    console.error('❌ GeckoTerminal: Error fetching OHLC data:', error);
+    subgraphLogger.error('❌ GeckoTerminal: Error fetching OHLC data:', error);
     return [];
   }
 }
@@ -239,17 +240,17 @@ export async function getPoolInfo(
   try {
     const networkId = getNetworkId(chainId);
     if (!networkId) {
-      console.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
+      subgraphLogger.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
       return null;
     }
 
     const url = `${GECKOTERMINAL_API_BASE}/networks/${networkId}/pools/${poolAddress.toLowerCase()}`;
-    console.log(`🦎 GeckoTerminal: Fetching pool info from ${url}`);
+    subgraphLogger.debug(`🦎 GeckoTerminal: Fetching pool info from ${url}`);
 
     const response = await rateLimitedFetch(url);
 
     if (!response?.data) {
-      console.warn('⚠️ GeckoTerminal: Invalid pool info response format');
+      subgraphLogger.warn('⚠️ GeckoTerminal: Invalid pool info response format');
       return null;
     }
 
@@ -257,14 +258,14 @@ export async function getPoolInfo(
     const baseToken = response.data.relationships?.base_token?.data?.id?.split('_')[1]?.toLowerCase();
     const quoteToken = response.data.relationships?.quote_token?.data?.id?.split('_')[1]?.toLowerCase();
 
-    console.log(`✅ GeckoTerminal: Pool ${poolAddress} - Base: ${baseToken}, Quote: ${quoteToken}`);
+    subgraphLogger.debug(`✅ GeckoTerminal: Pool ${poolAddress} - Base: ${baseToken}, Quote: ${quoteToken}`);
 
     // Return the FULL response.data object which includes:
     // - attributes: { base_token_price_usd, volume_usd, reserve_in_usd, price_change_percentage, etc. }
     // - relationships: { base_token, quote_token }
     return response.data;
   } catch (error) {
-    console.error('❌ GeckoTerminal: Error fetching pool info:', error);
+    subgraphLogger.error('❌ GeckoTerminal: Error fetching pool info:', error);
     return null;
   }
 }
@@ -297,7 +298,7 @@ export function convertGeckoTerminalToChartData(ohlcvList: any[], invert: boolea
 
     // Debug first candle
     if (index === 0) {
-      console.log('🔍 First OHLC candle (BEFORE inversion):', {
+      subgraphLogger.debug('🔍 First OHLC candle (BEFORE inversion):', {
         close: closePrice,
         open: openPrice,
         high: highPrice,
@@ -319,7 +320,7 @@ export function convertGeckoTerminalToChartData(ohlcvList: any[], invert: boolea
 
     // Debug first candle after inversion
     if (index === 0) {
-      console.log('🔍 First OHLC candle (AFTER inversion):', {
+      subgraphLogger.debug('🔍 First OHLC candle (AFTER inversion):', {
         close: closePrice,
         open: openPrice,
         high: highPrice,
@@ -358,27 +359,27 @@ export async function getPoolTrades(
   try {
     const networkId = getNetworkId(chainId);
     if (!networkId) {
-      console.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
+      subgraphLogger.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
       return [];
     }
 
     const url = `${GECKOTERMINAL_API_BASE}/networks/${networkId}/pools/${poolAddress.toLowerCase()}/trades?trade_volume_in_usd_greater_than=0`;
 
-    console.log(`🦎 GeckoTerminal: Fetching recent trades from ${url}`);
+    subgraphLogger.debug(`🦎 GeckoTerminal: Fetching recent trades from ${url}`);
 
     const response = await rateLimitedFetch(url);
 
     if (!response?.data || !Array.isArray(response.data)) {
-      console.warn('⚠️ GeckoTerminal: Invalid trades response format');
+      subgraphLogger.warn('⚠️ GeckoTerminal: Invalid trades response format');
       return [];
     }
 
     const trades = response.data.slice(0, limit);
-    console.log(`✅ GeckoTerminal: Fetched ${trades.length} recent trades`);
+    subgraphLogger.debug(`✅ GeckoTerminal: Fetched ${trades.length} recent trades`);
 
     return trades;
   } catch (error) {
-    console.error('❌ GeckoTerminal: Error fetching trades:', error);
+    subgraphLogger.error('❌ GeckoTerminal: Error fetching trades:', error);
     return [];
   }
 }

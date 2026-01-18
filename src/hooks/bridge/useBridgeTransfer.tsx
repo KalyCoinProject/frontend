@@ -9,6 +9,7 @@ import { useTransferStore, TransferStatus, TransferContext, txCategoryToStatuses
 import { useToast, toastHelpers } from '@/components/ui/toast';
 import { bridgeHelpers } from '@/utils/bridge/bridgeHelpers';
 import { loggerHelpers } from '@/utils/bridge/logger';
+import { bridgeLogger } from '@/lib/logger';
 
 export interface TransferParams {
   originChain: string;
@@ -92,7 +93,7 @@ export function useBridgeTransfer() {
       updateTransferStatus(transferIndex, TransferStatus.Preparing);
 
       // Check destination collateral sufficiency (CRITICAL GAP FIXED)
-      console.log('🔍 Checking destination collateral...');
+      bridgeLogger.debug('🔍 Checking destination collateral...');
       const isCollateralSufficient = await warpCore.isDestinationCollateralSufficient({
         originTokenAmount: tokenAmount,
         destination: params.destinationChain,
@@ -106,7 +107,7 @@ export function useBridgeTransfer() {
       }
 
       // Validate transfer
-      console.log('✅ Validating transfer...');
+      bridgeLogger.debug('✅ Validating transfer...');
       const validation = await warpCore.validateTransfer({
         originTokenAmount: tokenAmount,
         destination: params.destinationChain,
@@ -125,7 +126,7 @@ export function useBridgeTransfer() {
       updateTransferStatus(transferIndex, TransferStatus.CreatingTxs);
 
       // Get transfer transactions
-      console.log('📝 Creating transfer transactions...');
+      bridgeLogger.debug('📝 Creating transfer transactions...');
       const transferTxs = await warpCore.getTransferRemoteTxs({
         originTokenAmount: tokenAmount,
         destination: params.destinationChain,
@@ -133,9 +134,9 @@ export function useBridgeTransfer() {
         sender: account,
       });
 
-      console.log(`📋 Created ${transferTxs.length} transactions`);
+      bridgeLogger.debug(`📋 Created ${transferTxs.length} transactions`);
       transferTxs.forEach((tx, index) => {
-        console.log(`Transaction ${index + 1}:`, {
+        bridgeLogger.debug(`Transaction ${index + 1}:`, {
           category: tx.category
         });
       });
@@ -150,14 +151,14 @@ export function useBridgeTransfer() {
         // Update status: Signing
         updateTransferStatus(transferIndex, signingStatus);
 
-        console.log(`✍️ Signing ${category} transaction...`);
+        bridgeLogger.debug(`✍️ Signing ${category} transaction...`);
         const txHash = await signTransaction(tx);
         txHashes.push(txHash);
 
         // Update status: Confirming
         updateTransferStatus(transferIndex, confirmingStatus, txHash);
 
-        console.log(`⏳ Confirming ${category} transaction: ${txHash}`);
+        bridgeLogger.debug(`⏳ Confirming ${category} transaction: ${txHash}`);
 
         // TODO: Wait for transaction receipt and extract message ID
         // This is not critical for transfer success, so we'll skip it for now
@@ -166,11 +167,11 @@ export function useBridgeTransfer() {
         //   const receipt = await provider.waitForTransaction(txHash);
         //   const messageId = bridgeHelpers.extractMessageIdFromReceipt(receipt, params.originChain);
         //   if (messageId) {
-        //     console.log(`📧 Message ID extracted: ${messageId}`);
+        //     bridgeLogger.debug(`📧 Message ID extracted: ${messageId}`);
         //     updateTransferStatus(transferIndex, confirmingStatus, txHash, messageId);
         //   }
         // } catch (receiptError) {
-        //   console.warn('⚠️ Failed to extract message ID from receipt:', receiptError);
+        //   bridgeLogger.warn('⚠️ Failed to extract message ID from receipt:', receiptError);
         // }
 
         // Show transaction sent toast
@@ -190,11 +191,11 @@ export function useBridgeTransfer() {
       );
 
       setSuccessMessage(`Transfer initiated! ${txHashes.length} transaction(s) sent.`);
-      console.log('🎉 Bridge transfer completed successfully!');
+      bridgeLogger.debug('🎉 Bridge transfer completed successfully!');
 
       return transferTxs;
     } catch (err) {
-      console.error('❌ Bridge transfer failed:', err);
+      bridgeLogger.error('❌ Bridge transfer failed:', err);
       const errorMessage = err instanceof Error ? err.message : 'Transfer failed';
 
       // Update transfer status to failed if we have a transfer index

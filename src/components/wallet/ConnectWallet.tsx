@@ -11,6 +11,8 @@ import { useWallet } from '@/hooks/useWallet'
 import { Wallet, ExternalLink, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { internalWalletConnector } from '@/connectors/internalWallet'
+import { walletLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 interface ConnectWalletProps {
   children?: React.ReactNode
@@ -30,12 +32,12 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
   // DEBUG: Log available connectors (only in development and not during render)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('Available connectors:', connectors.map(c => ({
+      walletLogger.debug('Available connectors:', connectors.map(c => ({
         id: c.id,
         name: c.name,
         type: c.type
       })))
-      console.log('Internal connector available:', !!internalWalletConnector)
+      walletLogger.debug('Internal connector available:', !!internalWalletConnector)
     }
   }, [connectors])
 
@@ -141,7 +143,7 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
                           await connect({ connector: internalWalletConnector })
                           setShowWalletModal(false)
                         } catch (error) {
-                          console.error('Failed to connect internal wallet:', error)
+                          walletLogger.error('Failed to connect internal wallet:', error)
                           alert(error instanceof Error ? error.message : 'Failed to connect internal wallet')
                         }
                       }}
@@ -237,7 +239,7 @@ export function WalletInfo() {
         <div>
           <p className="text-xs text-gray-500 mb-1">Network</p>
           <p className="text-sm">
-            {chainId === 3888 ? 'KalyChain' : `Chain ${chainId}`}
+            {chainId === CHAIN_IDS.KALYCHAIN ? 'KalyChain' : `Chain ${chainId}`}
           </p>
         </div>
         

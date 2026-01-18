@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import { useState, useEffect } from 'react';
 import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
 import { useChainId } from 'wagmi';
@@ -58,7 +60,7 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
     refetch
   } = usePairSwaps({
     pairAddress: selectedPair?.pairAddress,
-    userAddress: activeTab === 'my' && chainId === 3888 ? userAddress : null,
+    userAddress: activeTab === 'my' && chainId === CHAIN_IDS.KALYCHAIN ? userAddress : null,
     limit: itemsPerPage * 5, // Get more transactions since we'll paginate client-side
     chainId: chainId
   });

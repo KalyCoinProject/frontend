@@ -1,5 +1,7 @@
 'use client';
 
+import { authLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -61,7 +63,7 @@ export function TokenExpirationWarning({
       await checkAuth();
       setShowWarning(false);
     } catch (error) {
-      console.error('Failed to refresh session:', error);
+      authLogger.error('Failed to refresh session:', error);
       // If refresh fails, redirect to login
       logout();
       router.push('/login');

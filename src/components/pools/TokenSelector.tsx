@@ -1,5 +1,9 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
+import { poolLogger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +50,7 @@ export default function TokenSelector({
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
   // Get current chain ID from wagmi, fallback to KalyChain (3888)
-  let chainId = 3888;
+  let chainId: number = CHAIN_IDS.KALYCHAIN;
   try {
     const wagmiChainId = useChainId();
     if (wagmiChainId) chainId = wagmiChainId;
@@ -112,7 +116,7 @@ export default function TokenSelector({
         ]);
 
         const customToken: Token = {
-          chainId: 3888,
+          chainId: CHAIN_IDS.KALYCHAIN,
           address: searchQuery,
           decimals: Number(decimals),
           name: name as string,
@@ -122,7 +126,7 @@ export default function TokenSelector({
 
         setCustomTokens([customToken]);
       } catch (error) {
-        console.error('Error fetching custom token:', error);
+        poolLogger.error('Error fetching custom token:', error);
         setCustomTokenError('Invalid token address or network error');
         setCustomTokens([]);
       } finally {

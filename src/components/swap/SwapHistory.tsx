@@ -1,14 +1,16 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
 } from '@/components/ui/tabs';
 import {
   Clock,
@@ -23,6 +25,7 @@ import { useSwapTransactions, type SwapTransaction } from '@/hooks/useSwapTransa
 import { useDexData, type DexTransaction } from '@/hooks/useDexData';
 import { useExplorerTransactions, type ExplorerTransaction } from '@/hooks/useExplorerTransactions';
 import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
+import { swapLogger } from '@/lib/logger';
 import { useAccount, useChainId } from 'wagmi';
 import { getAddressUrl, getExplorerName } from '@/utils/explorerLinks';
 
@@ -45,7 +48,7 @@ export default function SwapHistory({
 
   // Debug logging
   useEffect(() => {
-    console.log('SwapHistory - Wallet status:', { address, isConnected, activeTab, chainId });
+    swapLogger.debug('SwapHistory - Wallet status:', { address, isConnected, activeTab, chainId });
   }, [address, isConnected, activeTab, chainId]);
 
   // Use subgraph/GeckoTerminal for recent trades (all trades or pair-specific)
@@ -69,7 +72,7 @@ export default function SwapHistory({
     refetch: refetchUser
   } = usePairSwaps({
     pairAddress: pairAddress,
-    userAddress: isConnected && chainId === 3888 ? address : null,
+    userAddress: isConnected && chainId === CHAIN_IDS.KALYCHAIN ? address : null,
     limit: maxItems,
     chainId: chainId
   });

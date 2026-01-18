@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { formatUnits } from 'ethers/lib/utils';
+import { farmingLogger } from '@/lib/logger';
 
 // Types for user farming positions
 export interface UserFarmingPosition {
@@ -61,13 +62,13 @@ export function useUserFarmingPositions(userAddress?: string) {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching user farming positions for:', userAddress);
+      farmingLogger.debug('🔍 Fetching user farming positions for:', userAddress);
 
       // Use backend API URL from environment variables with fallback
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
       const graphqlEndpoint = `${apiUrl}/graphql`;
 
-      console.log('📡 GraphQL Endpoint:', graphqlEndpoint);
+      farmingLogger.debug('📡 GraphQL Endpoint:', graphqlEndpoint);
 
       const response = await fetch(graphqlEndpoint, {
         method: 'POST',
@@ -102,10 +103,10 @@ export function useUserFarmingPositions(userAddress?: string) {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 User farming positions response:', result);
+        farmingLogger.debug('📊 User farming positions response:', result);
 
         if (result.errors) {
-          console.error('GraphQL errors:', result.errors);
+          farmingLogger.error('GraphQL errors:', result.errors);
           throw new Error(result.errors[0].message);
         }
 
@@ -161,7 +162,7 @@ export function useUserFarmingPositions(userAddress?: string) {
           setPositions(userPositions);
           setSummary(newSummary);
 
-          console.log(`✅ Fetched ${userPositions.length} farming positions (${activePositions.length} active)`);
+          farmingLogger.debug(`✅ Fetched ${userPositions.length} farming positions (${activePositions.length} active)`);
         } else {
           setPositions([]);
           setSummary({
@@ -174,11 +175,11 @@ export function useUserFarmingPositions(userAddress?: string) {
         }
       } else {
         const errorText = await response.text();
-        console.error('❌ Backend GraphQL response not ok:', response.status, errorText);
+        farmingLogger.error('❌ Backend GraphQL response not ok:', response.status, errorText);
         throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
-      console.error('❌ Error fetching user farming positions:', err);
+      farmingLogger.error('❌ Error fetching user farming positions:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch farming positions';
       setError(`User farming positions fetch failed: ${errorMessage}`);
     } finally {
@@ -316,7 +317,7 @@ export function useUserFarmingPosition(userAddress?: string, poolAddress?: strin
         throw new Error('Failed to fetch farming position');
       }
     } catch (err) {
-      console.error('❌ Error fetching farming position:', err);
+      farmingLogger.error('❌ Error fetching farming position:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch farming position');
     } finally {
       setIsLoading(false);

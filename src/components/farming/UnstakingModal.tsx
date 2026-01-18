@@ -11,6 +11,7 @@ import { formatTokenAmount } from '@/lib/utils'
 import { useFarmingContracts } from '@/hooks/farming/useFarmingContracts'
 import { BigNumber, ethers } from 'ethers'
 import TokenPairDisplay from './TokenPairDisplay'
+import { farmingLogger } from '@/lib/logger'
 
 export default function UnstakingModal({
   isOpen,
@@ -76,7 +77,7 @@ export default function UnstakingModal({
       
       if (hash) {
         setTxHash(hash)
-        console.log('✅ Unstaking transaction submitted:', hash)
+        farmingLogger.debug('✅ Unstaking transaction submitted:', hash)
 
         // Call onSuccess to refresh data since modal is already closed
         if (onSuccess) {
@@ -90,7 +91,7 @@ export default function UnstakingModal({
         throw new Error('Transaction failed. Please try again.')
       }
     } catch (err) {
-      console.error('Unstaking error:', err)
+      farmingLogger.error('Unstaking error:', err)
       // Since modal is closed, we can't show the error in the modal
       // Could be improved with toast notifications or other error handling
       alert(err instanceof Error ? err.message : 'Failed to unstake tokens')

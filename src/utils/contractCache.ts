@@ -1,5 +1,7 @@
 'use client'
 
+import { contractLogger } from '@/lib/logger';
+
 /**
  * Contract data caching system
  * Caches contract responses for 30-60 seconds to avoid redundant calls
@@ -37,7 +39,7 @@ class ContractCache {
       return null
     }
 
-    console.log(`📦 Cache HIT for ${key}`)
+    contractLogger.debug(`📦 Cache HIT for ${key}`)
     return entry.data as T
   }
 
@@ -53,7 +55,7 @@ class ContractCache {
       ttl
     })
 
-    console.log(`💾 Cache SET for ${key} (TTL: ${ttl}ms)`)
+    contractLogger.debug(`💾 Cache SET for ${key} (TTL: ${ttl}ms)`)
   }
 
   /**
@@ -68,7 +70,7 @@ class ContractCache {
    */
   delete(key: string): void {
     this.cache.delete(key)
-    console.log(`🗑️ Cache DELETE for ${key}`)
+    contractLogger.debug(`🗑️ Cache DELETE for ${key}`)
   }
 
   /**
@@ -76,7 +78,7 @@ class ContractCache {
    */
   clear(): void {
     this.cache.clear()
-    console.log('🗑️ Cache CLEARED')
+    contractLogger.debug('🗑️ Cache CLEARED')
   }
 
   /**
@@ -94,7 +96,7 @@ class ContractCache {
     }
 
     if (cleaned > 0) {
-      console.log(`🧹 Cache cleanup: removed ${cleaned} expired entries`)
+      contractLogger.debug(`🧹 Cache cleanup: removed ${cleaned} expired entries`)
     }
   }
 
@@ -175,13 +177,13 @@ export function withCache<T extends any[], R>(
     }
 
     // Cache miss, execute function
-    console.log(`📡 Cache MISS for ${key}, fetching...`)
+    contractLogger.debug(`📡 Cache MISS for ${key}, fetching...`)
     try {
       const result = await fn(...args)
       contractCache.set(key, result, options)
       return result
     } catch (error) {
-      console.error(`❌ Failed to fetch ${key}:`, error)
+      contractLogger.error(`❌ Failed to fetch ${key}:`, error)
       throw error
     }
   }
@@ -198,7 +200,7 @@ export function invalidateCache(pattern: string): void {
     contractCache.delete(key)
   })
 
-  console.log(`🗑️ Invalidated ${matchingKeys.length} cache entries matching "${pattern}"`)
+  contractLogger.debug(`🗑️ Invalidated ${matchingKeys.length} cache entries matching "${pattern}"`)
 }
 
 /**

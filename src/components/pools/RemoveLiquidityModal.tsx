@@ -1,5 +1,7 @@
 'use client';
 
+import { poolLogger } from '@/lib/logger';
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -111,11 +113,11 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
       );
 
       if (result) {
-        console.log('✅ Liquidity removed successfully');
+        poolLogger.debug('✅ Liquidity removed successfully');
         onClose();
       }
     } catch (error) {
-      console.error('❌ Error removing liquidity:', error);
+      poolLogger.error('❌ Error removing liquidity:', error);
     } finally {
       setIsLoading(false);
     }

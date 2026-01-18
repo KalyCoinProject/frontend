@@ -1,3 +1,4 @@
+import { launchpadLogger } from '@/lib/logger';
 import { useState, useCallback } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { parseEther, formatEther, encodeFunctionData } from 'viem'
@@ -196,7 +197,7 @@ export function useParticipation(): UseParticipationReturn {
       await fetchUserContribution(contractAddress, projectType)
       
     } catch (err) {
-      console.error('Participation failed:', err)
+      launchpadLogger.error('Participation failed:', err)
       setError(err instanceof Error ? err.message : 'Participation failed')
     } finally {
       setIsLoading(false)
@@ -222,7 +223,7 @@ export function useParticipation(): UseParticipationReturn {
       await fetchUserContribution(contractAddress, projectType)
       
     } catch (err) {
-      console.error('Claim failed:', err)
+      launchpadLogger.error('Claim failed:', err)
       setError(err instanceof Error ? err.message : 'Claim failed')
     } finally {
       setIsLoading(false)
@@ -248,7 +249,7 @@ export function useParticipation(): UseParticipationReturn {
       await fetchUserContribution(contractAddress, projectType)
       
     } catch (err) {
-      console.error('Refund failed:', err)
+      launchpadLogger.error('Refund failed:', err)
       setError(err instanceof Error ? err.message : 'Refund failed')
     } finally {
       setIsLoading(false)
@@ -317,7 +318,7 @@ export function useParticipation(): UseParticipationReturn {
       })
 
     } catch (err) {
-      console.error('Failed to fetch user contribution:', err)
+      launchpadLogger.error('Failed to fetch user contribution:', err)
     }
   }, [address, publicClient])
 
@@ -380,7 +381,7 @@ export function useParticipation(): UseParticipationReturn {
         return { min: '0.1', max: '1000' }
       }
     } catch (err) {
-      console.error('Failed to get contribution limits:', err)
+      launchpadLogger.error('Failed to get contribution limits:', err)
       return { min: '0.1', max: '10' } // Fallback limits
     }
   }, [publicClient])

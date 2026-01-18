@@ -3,13 +3,14 @@
 
 import { ChainMap, ChainMetadata, ExplorerFamily } from '@hyperlane-xyz/sdk';
 import { ProtocolType } from '@hyperlane-xyz/utils';
+import { CHAIN_IDS } from '@/config/chains';
 
 // Complete chain configurations matching production standards
 export const bridgeChains: ChainMap<ChainMetadata> = {
   kalychain: {
     protocol: ProtocolType.Ethereum,
-    chainId: 3888,
-    domainId: 3888,
+    chainId: CHAIN_IDS.KALYCHAIN,
+    domainId: CHAIN_IDS.KALYCHAIN,
     name: 'kalychain',
     displayName: 'KalyChain',
     nativeToken: { name: 'KalyCoin', symbol: 'KLC', decimals: 18 },

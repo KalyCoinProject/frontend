@@ -1,3 +1,4 @@
+import { CHAIN_IDS } from '@/config/chains';
 import { DexConfig } from './types';
 import { KALYCHAIN_TOKENS } from './tokens/kalychain';
 import { ROUTER_ABI, FACTORY_ABI } from '../abis';
@@ -20,7 +21,7 @@ export const KALYSWAP_CONFIG: DexConfig = {
 
 // KalySwap specific constants
 export const KALYSWAP_CONSTANTS = {
-  CHAIN_ID: 3888,
+  CHAIN_ID: CHAIN_IDS.KALYCHAIN,
   INIT_CODE_HASH: '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f', // KalySwap init code hash
   MINIMUM_LIQUIDITY: 1000,
   FEE_DENOMINATOR: 10000,

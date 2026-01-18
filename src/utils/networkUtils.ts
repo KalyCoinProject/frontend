@@ -1,3 +1,4 @@
+import { contractLogger } from '@/lib/logger';
 /**
  * Network utilities for handling API requests with proper error handling,
  * timeouts, and retry logic to prevent NetworkError issues.
@@ -54,11 +55,11 @@ export async function fetchWithTimeout(
       const networkError = createNetworkError(error, url);
 
       if (isLastAttempt) {
-        console.error(`❌ Network request failed after ${retries + 1} attempts:`, url, networkError);
+        contractLogger.error(`❌ Network request failed after ${retries + 1} attempts:`, url, networkError);
         throw networkError;
       }
 
-      console.warn(`⚠️ Network request attempt ${attempt + 1} failed, retrying:`, url, networkError.message);
+      contractLogger.warn(`⚠️ Network request attempt ${attempt + 1} failed, retrying:`, url, networkError.message);
       
       // Wait before retry with exponential backoff
       await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, attempt)));
@@ -167,9 +168,9 @@ export async function safeApiCall<T>(
     return await apiCall();
   } catch (error) {
     if (isNetworkError(error)) {
-      console.warn(`${errorContext} failed with network error, using fallback:`, error.message);
+      contractLogger.warn(`${errorContext} failed with network error, using fallback:`, error.message);
     } else {
-      console.error(`${errorContext} failed:`, error);
+      contractLogger.error(`${errorContext} failed:`, error);
     }
     return fallbackValue;
   }

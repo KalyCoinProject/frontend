@@ -1,5 +1,9 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
+import { logger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
@@ -182,8 +186,8 @@ const EXPORT_WALLET_QUERY = `
   }
 `;
 
-// Wallet interface
-interface Token {
+// Wallet-specific token interface (different from DEX Token type)
+interface WalletToken {
   symbol: string;
   balance: string;
   address: string;
@@ -200,7 +204,7 @@ interface NativeTokenBalance {
 
 interface WalletBalance {
   native: NativeTokenBalance;
-  tokens: Token[];
+  tokens: WalletToken[];
 }
 
 interface ChainInfo {
@@ -262,9 +266,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createWalletPassword, setCreateWalletPassword] = useState('');
-  const [selectedChainId, setSelectedChainId] = useState<number>(3888); // Default to KalyChain
+  const [selectedChainId, setSelectedChainId] = useState<number>(CHAIN_IDS.KALYCHAIN); // Default to KalyChain
   const [supportedChains, setSupportedChains] = useState<ChainInfo[]>([
-    { chainId: 3888, name: 'KalyChain', symbol: 'KLC', decimals: 18, rpcUrl: '', blockExplorer: 'https://kalyscan.io', isTestnet: false },
+    { chainId: CHAIN_IDS.KALYCHAIN, name: 'KalyChain', symbol: 'KLC', decimals: 18, rpcUrl: '', blockExplorer: 'https://kalyscan.io', isTestnet: false },
     { chainId: 56, name: 'BNB Smart Chain', symbol: 'BNB', decimals: 18, rpcUrl: '', blockExplorer: 'https://bscscan.com', isTestnet: false },
     { chainId: 42161, name: 'Arbitrum One', symbol: 'ETH', decimals: 18, rpcUrl: '', blockExplorer: 'https://arbiscan.io', isTestnet: false }
   ]);
@@ -303,7 +307,7 @@ export default function DashboardPage() {
         const result = await fetchGraphQLWithAuth(ME_QUERY);
         setUser(result.data.me);
       } catch (err) {
-        console.error('Error fetching user data:', err);
+        logger.error('Error fetching user data:', err);
 
         // Import auth utilities for error parsing
         import('@/utils/auth').then(({ parseAuthError }) => {
@@ -340,13 +344,13 @@ export default function DashboardPage() {
         const result = await response.json();
 
         if (result.errors) {
-          console.error('Error fetching supported chains:', result.errors[0].message);
+          logger.error('Error fetching supported chains:', result.errors[0].message);
           return;
         }
 
         setSupportedChains(result.data.supportedChains);
       } catch (err) {
-        console.error('Error fetching supported chains:', err);
+        logger.error('Error fetching supported chains:', err);
       }
     };
 
@@ -414,7 +418,7 @@ export default function DashboardPage() {
       setCreateWalletPassword('');
     } catch (err) {
       setCreateWalletError(err instanceof Error ? err.message : 'Failed to create wallet');
-      console.error('Error creating wallet:', err);
+      logger.error('Error creating wallet:', err);
     } finally {
       setCreatingWallet(false);
     }
@@ -469,7 +473,7 @@ export default function DashboardPage() {
       setExportPrivateKey(result.data.exportWallet.privateKey);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Failed to export wallet');
-      console.error('Error exporting wallet:', err);
+      logger.error('Error exporting wallet:', err);
     }
   };
 
@@ -626,7 +630,7 @@ export default function DashboardPage() {
 
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to send transaction');
-      console.error('Error sending transaction:', err);
+      logger.error('Error sending transaction:', err);
     } finally {
       setSendingTransaction(false);
     }

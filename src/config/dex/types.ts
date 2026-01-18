@@ -1,3 +1,4 @@
+import { CHAIN_IDS } from '@/config/chains';
 // Types for DEX configuration system
 
 export interface Token {
@@ -9,6 +10,14 @@ export interface Token {
   logoURI: string;
   isNative?: boolean;
   coingeckoId?: string; // CoinGecko coin ID for dynamic chart data
+  // Optional balance field (populated by wallet queries)
+  balance?: string;
+  // Optional subgraph data fields
+  tradeVolumeUSD?: string;
+  totalLiquidity?: string;
+  derivedKLC?: string;
+  txCount?: string;
+  priceUSD?: string;
 }
 
 export interface DexConfig {
@@ -55,11 +64,45 @@ export interface PairInfo {
   totalSupply: string;
 }
 
+// Liquidity operation parameters
+export interface AddLiquidityParams {
+  tokenA: Token;
+  tokenB: Token;
+  amountADesired: string;
+  amountBDesired: string;
+  amountAMin: string;
+  amountBMin: string;
+  to: string;
+  deadline: number;
+  slippageTolerance: number;
+}
+
+export interface RemoveLiquidityParams {
+  tokenA: Token;
+  tokenB: Token;
+  liquidity: string;
+  amountAMin: string;
+  amountBMin: string;
+  to: string;
+  deadline: number;
+}
+
+export interface LiquidityPosition {
+  pairAddress: string;
+  token0: Token;
+  token1: Token;
+  lpBalance: string;
+  reserve0: string;
+  reserve1: string;
+  totalSupply: string;
+  share: string; // User's share of the pool as a percentage
+}
+
 // DEX Protocol Types
 export type DexProtocol = 'kalyswap' | 'pancakeswap' | 'uniswap-v2';
 
 // Supported Chain IDs
-export const SUPPORTED_DEX_CHAINS = [3888, 56, 42161] as const;
+export const SUPPORTED_DEX_CHAINS = [CHAIN_IDS.KALYCHAIN, 56, 42161] as const;
 export type SupportedDexChainId = typeof SUPPORTED_DEX_CHAINS[number];
 
 // Helper function to check if chain supports DEX

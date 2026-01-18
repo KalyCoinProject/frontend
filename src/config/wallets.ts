@@ -1,3 +1,4 @@
+import { walletLogger } from '@/lib/logger';
 import { Wallet } from '@rainbow-me/rainbowkit'
 import { Chain } from 'viem'
 import { internalWalletConnector } from '@/connectors/internalWallet'
@@ -5,7 +6,7 @@ import { internalWalletConnector } from '@/connectors/internalWallet'
 // KalySwap Internal Wallet configuration for Rainbow Kit
 // Following the working Arcana pattern - function that returns wallet
 export const kalyswapWallet = (params: any = {}): Wallet => {
-  console.log('Creating KalySwap Wallet configuration...', params)
+  walletLogger.debug('Creating KalySwap Wallet configuration...', params)
   return {
     id: 'kalyswap-internal',
     name: 'KalySwap Wallet',
@@ -67,7 +68,7 @@ export const kalyswapWallet = (params: any = {}): Wallet => {
     },
   },
   createConnector: () => {
-    console.log('Creating internal wallet connector...')
+    walletLogger.debug('Creating internal wallet connector...')
     // Return the connector function directly (corrected from Arcana pattern)
     return internalWalletConnector
   },

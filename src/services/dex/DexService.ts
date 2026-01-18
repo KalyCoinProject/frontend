@@ -1,8 +1,9 @@
+import { CHAIN_IDS } from '@/config/chains';
 // Main DEX service that routes to the appropriate DEX implementation
 // This is the entry point for all DEX operations
 
 import { IDexService, DexError } from './IDexService';
-import { Token, QuoteResult, SwapParams, PairInfo, isSupportedDexChain } from '@/config/dex/types';
+import { Token, QuoteResult, SwapParams, PairInfo, AddLiquidityParams, RemoveLiquidityParams, LiquidityPosition, isSupportedDexChain } from '@/config/dex/types';
 import { getDexConfig } from '@/config/dex';
 import type { PublicClient, WalletClient } from 'viem';
 
@@ -31,7 +32,7 @@ export class DexService {
     let service: IDexService;
 
     switch (chainId) {
-      case 3888: // KalyChain
+      case CHAIN_IDS.KALYCHAIN: // KalyChain
         if (!KalySwapService) {
           const { KalySwapService: Service } = await import('./KalySwapService');
           KalySwapService = Service;
@@ -160,7 +161,7 @@ export class DexService {
    * Get all supported chain IDs
    */
   static getSupportedChains(): number[] {
-    return [3888, 56, 42161]; // KalyChain, BSC, Arbitrum
+    return [CHAIN_IDS.KALYCHAIN, 56, 42161]; // KalyChain, BSC, Arbitrum
   }
 
   /**
@@ -168,6 +169,113 @@ export class DexService {
    */
   static clearCache(): void {
     this.instances.clear();
+  }
+
+  // ===============================
+  // Liquidity Operations
+  // ===============================
+
+  /**
+   * Add liquidity to a token pair on a specific chain
+   */
+  static async addLiquidity(
+    chainId: number,
+    params: AddLiquidityParams,
+    publicClient: PublicClient,
+    walletClient: WalletClient
+  ): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.addLiquidity(params, publicClient, walletClient);
+  }
+
+  /**
+   * Remove liquidity from a token pair on a specific chain
+   */
+  static async removeLiquidity(
+    chainId: number,
+    params: RemoveLiquidityParams,
+    publicClient: PublicClient,
+    walletClient: WalletClient
+  ): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.removeLiquidity(params, publicClient, walletClient);
+  }
+
+  /**
+   * Get user's liquidity positions on a specific chain
+   */
+  static async getUserLiquidityPositions(
+    chainId: number,
+    userAddress: string,
+    publicClient: PublicClient
+  ): Promise<LiquidityPosition[]> {
+    const service = await this.getDexService(chainId);
+    return service.getUserLiquidityPositions(userAddress, publicClient);
+  }
+
+  /**
+   * Calculate optimal amounts for adding liquidity
+   */
+  static async calculateOptimalLiquidityAmounts(
+    chainId: number,
+    tokenA: Token,
+    tokenB: Token,
+    amountA: string,
+    publicClient: PublicClient
+  ): Promise<{ amountB: string; isNewPair: boolean }> {
+    const service = await this.getDexService(chainId);
+    return service.calculateOptimalLiquidityAmounts(tokenA, tokenB, amountA, publicClient);
+  }
+
+  /**
+   * Approve token for router spending on a specific chain
+   */
+  static async approveToken(
+    chainId: number,
+    token: Token,
+    amount: string,
+    walletClient: WalletClient
+  ): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.approveToken(token, amount, walletClient);
+  }
+
+  /**
+   * Check token approval status on a specific chain
+   */
+  static async checkApproval(
+    chainId: number,
+    token: Token,
+    owner: string,
+    amount: string,
+    publicClient: PublicClient
+  ): Promise<boolean> {
+    const service = await this.getDexService(chainId);
+    return service.checkApproval(token, owner, amount, publicClient);
+  }
+
+  /**
+   * Get the router address for a specific chain
+   */
+  static async getRouterAddress(chainId: number): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.getRouterAddress();
+  }
+
+  /**
+   * Get the factory address for a specific chain
+   */
+  static async getFactoryAddress(chainId: number): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.getFactoryAddress();
+  }
+
+  /**
+   * Get the wrapped native token address for a specific chain
+   */
+  static async getWethAddress(chainId: number): Promise<string> {
+    const service = await this.getDexService(chainId);
+    return service.getWethAddress();
   }
 }
 

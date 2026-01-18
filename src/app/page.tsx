@@ -1,5 +1,7 @@
 'use client';
 
+import { logger } from '@/lib/logger';
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -26,7 +28,7 @@ export default function Home() {
         }
       } catch (error) {
         // Token is invalid or expired, stay on home page
-        console.log('No valid token found, staying on home page');
+        logger.debug('No valid token found, staying on home page');
       }
     };
 

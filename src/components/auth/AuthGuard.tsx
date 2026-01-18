@@ -1,5 +1,7 @@
 'use client';
 
+import { authLogger } from '@/lib/logger';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,7 +54,7 @@ export function AuthGuard({
       await checkAuth();
       setRetryCount(prev => prev + 1);
     } catch (err) {
-      console.error('Retry failed:', err);
+      authLogger.error('Retry failed:', err);
     } finally {
       setIsRetrying(false);
     }

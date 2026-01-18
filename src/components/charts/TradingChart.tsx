@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   createChart,
@@ -24,21 +26,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
-import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { useChartData, usePairMarketStats, formatTokenPrice, formatPriceChange } from '@/hooks';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
-import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 import { useChainId } from 'wagmi';
-
-// Token interface
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
+import { Token } from '@/config/dex/types';
+import { chartLogger as logger } from '@/lib/logger';
 
 
 
@@ -84,11 +76,11 @@ export default function TradingChart({
 
   // Use Token objects if provided, otherwise fall back to legacy string props
   // This ensures backward compatibility while supporting multichain tokens
-  const currentTokenA = tokenA || (symbol ? { symbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
-  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
+  const currentTokenA = tokenA || (symbol ? { symbol, chainId: currentChainId || CHAIN_IDS.KALYCHAIN, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
+  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: currentChainId || CHAIN_IDS.KALYCHAIN, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
 
   // Check if we have valid tokens to display chart
-  const hasValidTokens = currentTokenA && currentTokenB;
+  const hasValidTokens = Boolean(currentTokenA && currentTokenB);
 
   // Normalize token order for consistent display formatting
   // Always use the base token (non-stablecoin) for price formatting
@@ -110,13 +102,18 @@ export default function TradingChart({
     return addrA < addrB ? currentTokenA : currentTokenB;
   }, [currentTokenA?.address, currentTokenA?.symbol, currentTokenB?.address, currentTokenB?.symbol]);
 
-  // Fetch real historical price data from DEX subgraph only if we have valid tokens
+  // Fetch real historical price data using TanStack Query
   const {
     priceData: historicalData,
     isLoading: dataLoading,
     error: dataError,
     refetch: refetchData
-  } = useHistoricalPriceData(hasValidTokens ? currentTokenA : null, hasValidTokens ? currentTokenB : null);
+  } = useChartData({
+    tokenA: hasValidTokens ? currentTokenA : null,
+    tokenB: hasValidTokens ? currentTokenB : null,
+    enabled: hasValidTokens,
+    refetchInterval: 30000, // 30 seconds
+  });
 
   // Get real-time pair-specific market stats for accurate 24hr volume
   const {
@@ -124,7 +121,7 @@ export default function TradingChart({
     isLoading: volumeLoading
   } = usePairMarketStats(currentTokenA || undefined, currentTokenB || undefined);
 
-  console.log('🎯 TradingChart Debug:', {
+  logger.debug('🎯 TradingChart Debug:', {
     tokenA: currentTokenA?.symbol,
     tokenB: currentTokenB?.symbol,
     tokenAAddress: currentTokenA?.address,
@@ -162,7 +159,7 @@ export default function TradingChart({
       const price24hAgo = historicalData[historicalData.length - 25];
       const change = ((latest.close - price24hAgo.close) / price24hAgo.close) * 100;
 
-      console.log('📊 24h Price Change Calculation:', {
+      logger.debug('📊 24h Price Change Calculation:', {
         currentPrice: latest.close,
         price24hAgo: price24hAgo.close,
         change: change.toFixed(2) + '%',
@@ -187,7 +184,7 @@ export default function TradingChart({
     // Only initialize if we're not loading, have no errors, and have data
     const shouldInitialize = !dataLoading && !dataError && historicalData.length > 0;
 
-    console.log('🎯 Chart initialization effect:', {
+    logger.debug('🎯 Chart initialization effect:', {
       hasContainer: !!chartContainerRef.current,
       hasTokens: !!(currentTokenA && currentTokenB),
       hasExistingChart: !!chartRef.current,
@@ -198,12 +195,12 @@ export default function TradingChart({
     });
 
     if (!shouldInitialize) {
-      console.log('⚠️ Chart initialization skipped: conditions not met');
+      logger.debug('⚠️ Chart initialization skipped: conditions not met');
       return;
     }
 
     if (!chartContainerRef.current) {
-      console.log('⚠️ Chart initialization skipped: no container');
+      logger.debug('⚠️ Chart initialization skipped: no container');
       return;
     }
 
@@ -299,13 +296,13 @@ export default function TradingChart({
         }
       };
     } catch (error) {
-      console.error('Failed to initialize chart:', error);
+      logger.error('Failed to initialize chart:', error);
     }
   }, [dataLoading, dataError, historicalData.length, selectedChartType]);
 
   // Update chart data when data changes
   useEffect(() => {
-    console.log('📊 Chart data update effect:', {
+    logger.debug('📊 Chart data update effect:', {
       hasChartRef: !!chartRef.current,
       hasTokens: !!(currentTokenA && currentTokenB),
       chartDataLength: chartData.length,
@@ -313,7 +310,7 @@ export default function TradingChart({
     });
 
     if (!chartRef.current || chartData.length === 0) {
-      console.log('⚠️ Chart update skipped:', {
+      logger.debug('⚠️ Chart update skipped:', {
         hasChartRef: !!chartRef.current,
         chartDataLength: chartData.length
       });
@@ -325,7 +322,7 @@ export default function TradingChart({
       try {
         chartRef.current.removeSeries(seriesRef.current);
       } catch (error) {
-        console.warn('Error removing chart series:', error);
+        logger.warn('Error removing chart series:', error);
       }
       seriesRef.current = null;
     }
@@ -452,7 +449,7 @@ export default function TradingChart({
 
   }, [selectedChartType, currentTokenA, currentTokenB, chartData]);
 
-  console.log('TradingChart props:', {
+  logger.debug('TradingChart props:', {
     tokenA: currentTokenA?.symbol,
     tokenB: currentTokenB?.symbol,
     dataLoading,
@@ -549,7 +546,7 @@ export default function TradingChart({
     // Helper to get chain name
     const getChainName = (chainId?: number) => {
       switch (chainId) {
-        case 3888: return 'KalyChain';
+        case CHAIN_IDS.KALYCHAIN: return 'KalyChain';
         case 56: return 'BSC';
         case 42161: return 'Arbitrum';
         default: return 'Unknown';

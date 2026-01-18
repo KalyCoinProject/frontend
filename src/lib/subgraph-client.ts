@@ -1,11 +1,13 @@
+import { CHAIN_IDS } from '@/config/chains';
 import { GraphQLClient } from 'graphql-request';
+import { subgraphLogger as logger } from '@/lib/logger';
 import { KALYSWAP_CONFIG } from '@/config/dex/kalyswap';
 import { PANCAKESWAP_CONFIG } from '@/config/dex/pancakeswap';
 import { UNISWAP_V2_CONFIG } from '@/config/dex/uniswap-v2';
 
 // Chain-specific subgraph configurations
 const CHAIN_SUBGRAPH_CONFIGS = {
-  3888: KALYSWAP_CONFIG.subgraphUrl,     // KalyChain
+  [CHAIN_IDS.KALYCHAIN]: KALYSWAP_CONFIG.subgraphUrl,     // KalyChain
   56: PANCAKESWAP_CONFIG.subgraphUrl,    // BSC
   42161: UNISWAP_V2_CONFIG.subgraphUrl,  // Arbitrum
 } as const;
@@ -19,10 +21,10 @@ export function getSubgraphClient(chainId?: number): GraphQLClient {
     ? CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
     : DEFAULT_SUBGRAPH_URL;
 
-  console.log('🔗 Creating subgraph client:', {
+  logger.debug('🔗 Creating subgraph client:', {
     chainId,
     subgraphUrl,
-    isMultichain: !!chainId && chainId !== 3888
+    isMultichain: !!chainId && chainId !== CHAIN_IDS.KALYCHAIN
   });
 
   return new GraphQLClient(subgraphUrl, {
@@ -33,7 +35,7 @@ export function getSubgraphClient(chainId?: number): GraphQLClient {
 }
 
 // Default client for backward compatibility (KalyChain)
-export const subgraphClient = getSubgraphClient(3888);
+export const subgraphClient = getSubgraphClient(CHAIN_IDS.KALYCHAIN);
 
 // Enhanced request wrapper with retry logic - now supports custom client
 async function requestWithRetry<T>(
@@ -49,7 +51,7 @@ async function requestWithRetry<T>(
       const result = await graphqlClient.request<T>(query, variables);
       return result;
     } catch (error) {
-      console.warn(`Subgraph request attempt ${attempt + 1} failed:`, error);
+      logger.warn(`Subgraph request attempt ${attempt + 1} failed:`, error);
 
       if (attempt === retries) {
         // Last attempt failed, throw the error
@@ -313,7 +315,7 @@ export async function getFactoryData() {
     const result = await requestWithRetry<any>(FACTORY_QUERY);
     return result.kalyswapFactory;
   } catch (error) {
-    console.error('Error fetching factory data:', error);
+    logger.error('Error fetching factory data:', error);
     return null;
   }
 }
@@ -327,7 +329,7 @@ export async function getPairsData(first = 10000, orderBy = 'reserveUSD', orderD
     });
     return result.pairs;
   } catch (error) {
-    console.error('Error fetching pairs data:', error);
+    logger.error('Error fetching pairs data:', error);
     return [];
   }
 }
@@ -338,7 +340,7 @@ export async function getPairData(pairId: string, chainId?: number) {
     const result = await client.request(PAIR_QUERY, { id: pairId }) as any;
     return result.pair;
   } catch (error) {
-    console.error('Error fetching pair data:', error);
+    logger.error('Error fetching pair data:', error);
     return null;
   }
 }
@@ -353,7 +355,7 @@ export async function getPairDayData(pairAddress: string, first = 30, skip = 0, 
     }) as any;
     return result.pairDayDatas;
   } catch (error) {
-    console.error('Error fetching pair day data:', error);
+    logger.error('Error fetching pair day data:', error);
     return [];
   }
 }
@@ -362,7 +364,7 @@ export async function getPairHourData(pairAddress: string, first = 168, skip = 0
   try {
     const client = chainId ? getSubgraphClient(chainId) : subgraphClient;
 
-    console.log('🔍 getPairHourData request:', {
+    logger.debug('🔍 getPairHourData request:', {
       pairAddress,
       chainId,
       subgraphUrl: chainId && CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
@@ -378,7 +380,7 @@ export async function getPairHourData(pairAddress: string, first = 168, skip = 0
       skip
     }) as any;
 
-    console.log('✅ getPairHourData response:', {
+    logger.debug('✅ getPairHourData response:', {
       pairAddress,
       chainId,
       dataLength: result.pairHourDatas?.length || 0
@@ -386,7 +388,7 @@ export async function getPairHourData(pairAddress: string, first = 168, skip = 0
 
     return result.pairHourDatas;
   } catch (error) {
-    console.error('❌ Error fetching pair hour data:', {
+    logger.error('❌ Error fetching pair hour data:', {
       pairAddress,
       chainId,
       error: error instanceof Error ? error.message : error
@@ -394,7 +396,7 @@ export async function getPairHourData(pairAddress: string, first = 168, skip = 0
 
     // For external chains, suggest using CoinGecko instead
     if (chainId && (chainId === 56 || chainId === 42161)) {
-      console.log('💡 Suggestion: Use CoinGecko API for external chains instead of subgraph');
+      logger.debug('💡 Suggestion: Use CoinGecko API for external chains instead of subgraph');
     }
 
     return [];
@@ -409,7 +411,7 @@ export async function getKalyswapDayData(first = 7, skip = 0) {
     }) as any;
     return result.kalyswapDayDatas;
   } catch (error) {
-    console.error('Error fetching Kalyswap day data:', error);
+    logger.error('Error fetching Kalyswap day data:', error);
     return [];
   }
 }
@@ -419,7 +421,7 @@ export async function getTokenData(tokenId: string) {
     const result = await subgraphClient.request(TOKEN_QUERY, { id: tokenId }) as any;
     return result.token;
   } catch (error) {
-    console.error('Error fetching token data:', error);
+    logger.error('Error fetching token data:', error);
     return null;
   }
 }
@@ -433,7 +435,7 @@ export async function getPairSwaps(pairAddress: string, first = 20, skip = 0) {
     });
     return result.swaps;
   } catch (error) {
-    console.error('Error fetching pair swaps:', error);
+    logger.error('Error fetching pair swaps:', error);
     return [];
   }
 }
@@ -446,7 +448,7 @@ export async function getRecentSwaps(first = 20, skip = 0) {
     });
     return result.swaps;
   } catch (error) {
-    console.error('Error fetching recent swaps:', error);
+    logger.error('Error fetching recent swaps:', error);
     return [];
   }
 }
@@ -488,7 +490,7 @@ export async function getPairMarketStats(pairAddress: string, chainId?: number) 
       liquidity: parseFloat(pairData.reserveUSD || '0')
     };
   } catch (error) {
-    console.error('Error fetching pair market stats:', error);
+    logger.error('Error fetching pair market stats:', error);
     return null;
   }
 }

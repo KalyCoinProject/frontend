@@ -1,5 +1,7 @@
 'use client';
 
+import { poolLogger } from '@/lib/logger';
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,16 +11,8 @@ import { usePools } from '@/hooks/usePools';
 import { useAccount, usePublicClient } from 'wagmi';
 import { useTokenBalances } from '@/hooks/useTokenBalance';
 import { formatUnits } from 'viem';
-
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  balance?: string;
-}
+import { Token } from '@/config/dex/types';
+import { calculateBothPrices } from '@/utils/price';
 
 interface LiquidityFormProps {
   tokenA: Token;
@@ -97,7 +91,7 @@ export default function LiquidityForm({
       setApprovalA(ApprovalState.APPROVED);
     } catch (err) {
       setApprovalA(ApprovalState.NOT_APPROVED);
-      console.error('Error approving token A:', err);
+      poolLogger.error('Error approving token A:', err);
     }
   };
 
@@ -110,7 +104,7 @@ export default function LiquidityForm({
       setApprovalB(ApprovalState.APPROVED);
     } catch (err) {
       setApprovalB(ApprovalState.NOT_APPROVED);
-      console.error('Error approving token B:', err);
+      poolLogger.error('Error approving token B:', err);
     }
   };
 
@@ -125,7 +119,7 @@ export default function LiquidityForm({
           setPairExists(exists);
           setPairAddress(pairInfo?.address || '');
 
-          console.log(`Pair check for ${tokenA.symbol}/${tokenB.symbol}:`, {
+          poolLogger.debug(`Pair check for ${tokenA.symbol}/${tokenB.symbol}:`, {
             exists,
             pairAddress: pairInfo?.address,
             reserve0: pairInfo?.reserve0,
@@ -133,18 +127,22 @@ export default function LiquidityForm({
           });
 
           if (pairInfo && pairInfo.exists && pairInfo.reserve0 && pairInfo.reserve1) {
-            // Calculate market price (token1 per token0)
-            const reserve0 = parseFloat(pairInfo.reserve0);
-            const reserve1 = parseFloat(pairInfo.reserve1);
-            if (reserve0 > 0 && reserve1 > 0) {
-              const price = reserve1 / reserve0;
-              setMarketPrice(price.toFixed(6));
+            // Use centralized price calculation - token0Price = how much token1 per token0
+            // Note: pairInfo.token0/token1 are addresses (strings), not objects
+            const prices = calculateBothPrices({
+              token0: { id: pairInfo.token0 || tokenA.address },
+              token1: { id: pairInfo.token1 || tokenB.address },
+              reserve0: pairInfo.reserve0,
+              reserve1: pairInfo.reserve1,
+            });
+            if (prices.token0Price > 0) {
+              setMarketPrice(prices.token0Price.toFixed(6));
             }
           } else {
             setMarketPrice(null);
           }
         } catch (error) {
-          console.error('Error checking pair:', error);
+          poolLogger.error('Error checking pair:', error);
           setPairExists(false);
           setMarketPrice(null);
           setPairAddress('');
@@ -185,9 +183,9 @@ export default function LiquidityForm({
         const formattedBalance = formatUnits(lpBalance as bigint, 18);
         setUserLPBalance(formattedBalance);
 
-        console.log(`User LP balance for ${tokenA.symbol}/${tokenB.symbol}:`, formattedBalance);
+        poolLogger.debug(`User LP balance for ${tokenA.symbol}/${tokenB.symbol}:`, formattedBalance);
       } catch (error) {
-        console.error('Error fetching user LP balance:', error);
+        poolLogger.error('Error fetching user LP balance:', error);
         setUserLPBalance('0');
       }
     };
@@ -214,7 +212,7 @@ export default function LiquidityForm({
           onAmountBChangeRef.current(optimalAmounts.amountB);
         }
       } catch (error) {
-        console.error('Error calculating optimal amounts:', error);
+        poolLogger.error('Error calculating optimal amounts:', error);
       } finally {
         setIsCalculating(false);
       }
@@ -270,10 +268,10 @@ export default function LiquidityForm({
         // Reset form on success
         onAmountAChange('');
         onAmountBChange('');
-        console.log('✅ Liquidity operation completed successfully');
+        poolLogger.debug('✅ Liquidity operation completed successfully');
       }
     } catch (error) {
-      console.error('❌ Error in liquidity operation:', error);
+      poolLogger.error('❌ Error in liquidity operation:', error);
     } finally {
       setIsLoading(false);
     }

@@ -1,14 +1,22 @@
 // Contract addresses and configuration for KalySwap Launchpad
 // Based on deployed contracts from backend/src/blockchain/contracts/launchpad/README.md
 
+import { CHAIN_IDS, RPC_URLS as CENTRAL_RPC_URLS, CHAIN_METADATA } from './chains';
+
+/**
+ * @deprecated Use CHAIN_IDS from '@/config/chains' instead
+ */
 export const CHAIN_ID = {
-  KALYCHAIN_MAINNET: 3888,
-  KALYCHAIN_TESTNET: 3889,
+  KALYCHAIN_MAINNET: CHAIN_IDS.KALYCHAIN,
+  KALYCHAIN_TESTNET: CHAIN_IDS.KALYCHAIN_TESTNET,
 } as const;
 
+/**
+ * @deprecated Use RPC_URLS from '@/config/chains' instead
+ */
 export const RPC_URLS = {
-  [CHAIN_ID.KALYCHAIN_MAINNET]: 'https://rpc.kalychain.io/rpc',
-  [CHAIN_ID.KALYCHAIN_TESTNET]: 'https://testnet-rpc.kalychain.io/rpc',
+  [CHAIN_ID.KALYCHAIN_MAINNET]: CENTRAL_RPC_URLS[CHAIN_IDS.KALYCHAIN],
+  [CHAIN_ID.KALYCHAIN_TESTNET]: CENTRAL_RPC_URLS[CHAIN_IDS.KALYCHAIN_TESTNET],
 } as const;
 
 // Contract addresses for KalyChain Mainnet (Chain ID: 3888)
@@ -40,6 +48,31 @@ export const MAINNET_CONTRACTS = {
   POL: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
   KSWAP: '0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a',
 } as const;
+
+/**
+ * Known stablecoin addresses on KalyChain mainnet.
+ * IMPORTANT: Always use addresses, not symbols, to identify tokens.
+ * Symbols are not unique - anyone can create a token with any symbol.
+ */
+export const STABLECOIN_ADDRESSES = [
+  MAINNET_CONTRACTS.USDT.toLowerCase(),
+  MAINNET_CONTRACTS.USDC.toLowerCase(),
+  MAINNET_CONTRACTS.DAI.toLowerCase(),
+] as const;
+
+/**
+ * Check if an address is a known stablecoin.
+ * Uses address comparison, NOT symbol matching.
+ */
+export function isStablecoinAddress(address: string): boolean {
+  return STABLECOIN_ADDRESSES.includes(address.toLowerCase() as typeof STABLECOIN_ADDRESSES[number]);
+}
+
+/**
+ * Known WKLC/USDT pair address on KalyChain mainnet.
+ * This is the canonical pair for KLC price discovery.
+ */
+export const WKLC_USDT_PAIR = '0x25fddaf836dc5e285823a644bb86e0b79c8e2'.toLowerCase();
 
 // Contract addresses for KalyChain Testnet (Chain ID: 3889)
 export const TESTNET_CONTRACTS = {
@@ -104,29 +137,32 @@ export const BASE_TOKENS = [
   },
 ] as const;
 
-// Network configuration
+/**
+ * Network configuration
+ * @deprecated Use CHAIN_METADATA from '@/config/chains' for most use cases
+ */
 export const NETWORK_CONFIG = {
   [CHAIN_ID.KALYCHAIN_MAINNET]: {
-    name: 'KalyChain Mainnet',
-    shortName: 'KalyChain',
+    name: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN]?.name || 'KalyChain Mainnet',
+    shortName: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN]?.shortName || 'KalyChain',
     chainId: CHAIN_ID.KALYCHAIN_MAINNET,
     rpcUrl: RPC_URLS[CHAIN_ID.KALYCHAIN_MAINNET],
-    blockExplorer: 'https://kalyscan.io',
+    blockExplorer: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN]?.explorer || 'https://kalyscan.io',
     nativeCurrency: {
       name: 'KalyCoin',
-      symbol: 'KLC',
+      symbol: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN]?.symbol || 'KLC',
       decimals: 18,
     },
   },
   [CHAIN_ID.KALYCHAIN_TESTNET]: {
-    name: 'KalyChain Testnet',
-    shortName: 'KalyChain Testnet',
+    name: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN_TESTNET]?.name || 'KalyChain Testnet',
+    shortName: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN_TESTNET]?.shortName || 'KalyChain Testnet',
     chainId: CHAIN_ID.KALYCHAIN_TESTNET,
     rpcUrl: RPC_URLS[CHAIN_ID.KALYCHAIN_TESTNET],
-    blockExplorer: 'https://testnet.kalyscan.io',
+    blockExplorer: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN_TESTNET]?.explorer || 'https://testnet.kalyscan.io',
     nativeCurrency: {
       name: 'KalyCoin',
-      symbol: 'KLC',
+      symbol: CHAIN_METADATA[CHAIN_IDS.KALYCHAIN_TESTNET]?.symbol || 'KLC',
       decimals: 18,
     },
   },

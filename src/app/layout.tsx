@@ -23,9 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" />
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
       </head>
-      <body className={`${inter.className} bg-gray-50`} suppressHydrationWarning={true}>
+      <body className={`${inter.className}`} suppressHydrationWarning={true}>
         <ToastProvider>
           <WalletProviders>
             {children}

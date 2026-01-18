@@ -1,3 +1,4 @@
+import { stakingLogger } from '@/lib/logger';
 /**
  * Staking Action Hooks
  * 
@@ -98,7 +99,7 @@ export function useStakeKLC() {
         throw new Error('Invalid stake amount')
       }
 
-      console.log('🥩 Staking KLC:', {
+      stakingLogger.debug('🥩 Staking KLC:', {
         amount,
         amountWei: amountWei.toString(),
         isInternal: isUsingInternalWallet(connector),
@@ -178,14 +179,14 @@ export function useStakeKLC() {
 
       toast.success('Stake Transaction Sent', `Staking ${amount} KLC tokens...`)
 
-      console.log('✅ Stake transaction sent:', txHash)
+      stakingLogger.debug('✅ Stake transaction sent:', txHash)
       return txHash
 
     } catch (err) {
-      console.error('❌ Stake failed - Full error:', err)
-      console.error('❌ Error type:', typeof err)
-      console.error('❌ Error message:', err instanceof Error ? err.message : 'Unknown error')
-      console.error('❌ Error stack:', err instanceof Error ? err.stack : 'No stack trace')
+      stakingLogger.error('❌ Stake failed - Full error:', err)
+      stakingLogger.error('❌ Error type:', typeof err)
+      stakingLogger.error('❌ Error message:', err instanceof Error ? err.message : 'Unknown error')
+      stakingLogger.error('❌ Error stack:', err instanceof Error ? err.stack : 'No stack trace')
 
       const errorMessage = err instanceof Error ? err.message : 'Failed to stake KLC'
       setError(errorMessage)
@@ -243,14 +244,14 @@ export function useWithdrawKLC() {
       const functionData = encodeWithdrawCall(amountWei)
       const transaction = createStakingTransaction(functionData)
 
-      console.log('💰 Withdrawing KLC:', { amount, amountWei: amountWei.toString() })
+      stakingLogger.debug('💰 Withdrawing KLC:', { amount, amountWei: amountWei.toString() })
 
       // Sign and send transaction
       const txHash = await signTransaction(transaction)
 
       toast.success('Withdrawal Transaction Sent', `Withdrawing ${amount} KLC tokens...`)
 
-      console.log('✅ Withdrawal transaction sent:', txHash)
+      stakingLogger.debug('✅ Withdrawal transaction sent:', txHash)
       return txHash
 
     } catch (err) {
@@ -259,7 +260,7 @@ export function useWithdrawKLC() {
       
       toast.error('Withdrawal Failed', errorMessage)
       
-      console.error('❌ Withdrawal failed:', err)
+      stakingLogger.error('❌ Withdrawal failed:', err)
       throw err
     } finally {
       setIsLoading(false)
@@ -295,14 +296,14 @@ export function useClaimRewards() {
       const functionData = encodeClaimRewardCall()
       const transaction = createStakingTransaction(functionData)
 
-      console.log('🎁 Claiming rewards...')
+      stakingLogger.debug('🎁 Claiming rewards...')
 
       // Sign and send transaction
       const txHash = await signTransaction(transaction)
 
       toast.success('Claim Transaction Sent', 'Claiming your staking rewards...')
 
-      console.log('✅ Claim transaction sent:', txHash)
+      stakingLogger.debug('✅ Claim transaction sent:', txHash)
       return txHash
 
     } catch (err) {
@@ -311,7 +312,7 @@ export function useClaimRewards() {
       
       toast.error('Claim Failed', errorMessage)
       
-      console.error('❌ Claim failed:', err)
+      stakingLogger.error('❌ Claim failed:', err)
       throw err
     } finally {
       setIsLoading(false)
@@ -347,14 +348,14 @@ export function useExitStaking() {
       const functionData = encodeExitCall()
       const transaction = createStakingTransaction(functionData)
 
-      console.log('🚪 Exiting staking (withdraw all + claim)...')
+      stakingLogger.debug('🚪 Exiting staking (withdraw all + claim)...')
 
       // Sign and send transaction
       const txHash = await signTransaction(transaction)
 
       toast.success('Exit Transaction Sent', 'Withdrawing all staked KLC and claiming rewards...')
 
-      console.log('✅ Exit transaction sent:', txHash)
+      stakingLogger.debug('✅ Exit transaction sent:', txHash)
       return txHash
 
     } catch (err) {
@@ -363,7 +364,7 @@ export function useExitStaking() {
       
       toast.error('Exit Failed', errorMessage)
       
-      console.error('❌ Exit failed:', err)
+      stakingLogger.error('❌ Exit failed:', err)
       throw err
     } finally {
       setIsLoading(false)

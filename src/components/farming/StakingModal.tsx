@@ -12,6 +12,7 @@ import { formatNumber, formatPercentage, formatTokenAmount } from '@/lib/utils'
 import { useFarmingContracts } from '@/hooks/farming/useFarmingContracts'
 import { BigNumber, ethers } from 'ethers'
 import TokenPairDisplay from './TokenPairDisplay'
+import { farmingLogger } from '@/lib/logger'
 
 export default function StakingModal({
   isOpen,
@@ -76,14 +77,14 @@ export default function StakingModal({
       const lpTokenAddress = stakingInfo.stakedAmount.token.address
       const stakingRewardAddress = stakingInfo.stakingRewardAddress
 
-      console.log('🚀 Starting stake process:', {
+      farmingLogger.debug('🚀 Starting stake process:', {
         lpTokenAddress,
         stakingRewardAddress,
         amount: amountBN.toString()
       })
 
       // Always approve first to avoid "ds-math-sub-underflow" errors
-      console.log('Step 1: Approving LP tokens...')
+      farmingLogger.debug('Step 1: Approving LP tokens...')
       const approvalHash = await approveLPTokens(lpTokenAddress, stakingRewardAddress, amountBN)
 
       if (!approvalHash) {
@@ -91,15 +92,15 @@ export default function StakingModal({
         return
       }
 
-      console.log('✅ Approval successful:', approvalHash)
+      farmingLogger.debug('✅ Approval successful:', approvalHash)
 
       // Step 2: Stake LP tokens
-      console.log('Step 2: Staking LP tokens...')
+      farmingLogger.debug('Step 2: Staking LP tokens...')
       const stakeHash = await stakeLPTokens(stakingRewardAddress, amountBN)
 
       if (stakeHash) {
         setTxHash(stakeHash)
-        console.log('✅ Staking transaction submitted:', stakeHash)
+        farmingLogger.debug('✅ Staking transaction submitted:', stakeHash)
 
         // Call onSuccess to refresh data since modal is already closed
         if (onSuccess) {
@@ -113,7 +114,7 @@ export default function StakingModal({
         throw new Error('Staking failed. Please try again.')
       }
     } catch (err) {
-      console.error('Staking error:', err)
+      farmingLogger.error('Staking error:', err)
       // Since modal is closed, we can't show the error in the modal
       // Could be improved with toast notifications or other error handling
       alert(err instanceof Error ? err.message : 'Failed to stake tokens')

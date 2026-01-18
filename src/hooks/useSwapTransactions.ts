@@ -1,5 +1,7 @@
 'use client';
 
+import { swapLogger } from '@/lib/logger';
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 
@@ -105,7 +107,7 @@ export function useSwapTransactions(options: UseSwapTransactionsOptions = {}) {
         }
       } catch (error) {
         // Transaction might still be pending
-        console.debug(`Transaction ${tx.hash} still pending`);
+        swapLogger.debug(`Transaction ${tx.hash} still pending`);
       }
     }
   }, [transactions, publicClient, updateTransactionStatus]);

@@ -1,5 +1,7 @@
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +15,7 @@ import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
 import { SwapErrorType } from '@/utils/swapErrors';
 import { useSwapTransactions } from '@/hooks/useSwapTransactions';
 import { internalWalletUtils } from '@/connectors/internalWallet';
+import { useTokenLists } from '@/hooks/useTokenLists';
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient, useConfig, useConnectorClient } from 'wagmi';
@@ -22,22 +25,18 @@ import { parseEther, formatEther, getContract, parseUnits, formatUnits, encodeFu
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { ROUTER_ABI, ERC20_ABI, WKLC_ABI } from '@/config/abis';
 
+// DEX Service for quotes and swaps
+import { DexService } from '@/services/dex';
+
 // Custom hooks
 import { useTokenBalances } from '@/hooks/useTokenBalance';
 
 // Price impact utilities
 import { calculatePriceImpact, formatPriceImpact, getPriceImpactColor } from '@/utils/priceImpact';
 
-// Token interface
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
+// Token type from centralized types
+import { Token } from '@/config/dex/types';
+import { swapLogger as logger } from '@/lib/logger';
 
 // Props interface for SwapInterface
 interface SwapInterfaceProps {
@@ -45,100 +44,6 @@ interface SwapInterfaceProps {
   toToken?: Token | null;
   onTokenChange?: (fromToken: Token | null, toToken: Token | null) => void;
 }
-
-// KalyChain tokens - Official KalySwap Token List
-const KALYCHAIN_TOKENS: Token[] = [
-  {
-    chainId: 3888,
-    address: '0x0000000000000000000000000000000000000000',
-    decimals: 18,
-    name: 'KalyCoin',
-    symbol: 'KLC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png',
-    isNative: true
-  },
-  {
-    chainId: 3888,
-    address: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3',
-    decimals: 18,
-    name: 'Wrapped KalyCoin',
-    symbol: 'wKLC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a',
-    decimals: 18,
-    name: 'KalySwap Token',
-    symbol: 'KSWAP',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb',
-    decimals: 18,
-    name: 'Binance',
-    symbol: 'BNB',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A',
-    decimals: 6,
-    name: 'Tether USD',
-    symbol: 'USDT',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455',
-    decimals: 8,
-    name: 'Wrapped BTC',
-    symbol: 'WBTC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0xfdbB253753dDE60b11211B169dC872AaE672879b',
-    decimals: 18,
-    name: 'Ether Token',
-    symbol: 'ETH',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0xfdbB253753dDE60b11211B169dC872AaE672879b/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
-    decimals: 18,
-    name: 'Polygon Token',
-    symbol: 'POL',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9',
-    decimals: 6,
-    name: 'USD Coin',
-    symbol: 'USDC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9/logo_24.png'
-  },
-  {
-    chainId: 3888,
-    address: '0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6',
-    decimals: 18,
-    name: 'DAI Token',
-    symbol: 'DAI',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6/logo_24.png'
-    // Note: This is a Hyperlane bridge token (EvmHypSynthetic) that may not implement standard ERC20 balanceOf
-  },
-  {
-    chainId: 3888,
-    address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-    decimals: 18,
-    name: 'Clisha Coin',
-    symbol: 'CLISHA',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C/logo_24.png'
-  }
-];
 
 // Helper functions for wrap/unwrap detection
 const isWrapOperation = (fromToken: Token | null, toToken: Token | null): boolean => {
@@ -185,19 +90,26 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
+  // Get dynamic token list
+  const { tokens: availableTokens } = useTokenLists({ chainId: DEFAULT_CHAIN_ID });
+
   // Token balances
-  const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useTokenBalances(KALYCHAIN_TOKENS);
+  const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useTokenBalances(availableTokens);
 
   // Create wrapper function to convert address to symbol for TokenSelectorModal
   const getFormattedBalanceByAddress = (tokenAddress: string): string => {
-    const token = KALYCHAIN_TOKENS.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+    const token = availableTokens.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
     return token ? getFormattedBalance(token.symbol) : '0';
   };
 
+  // Get default tokens from the available tokens list
+  const defaultFromToken = availableTokens.find(t => t.isNative || t.symbol === 'KLC') || availableTokens[0] || null;
+  const defaultToToken = availableTokens.find(t => t.symbol === 'USDT') || availableTokens[1] || null;
+
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>({
-    fromToken: propFromToken || KALYCHAIN_TOKENS[0], // KLC
-    toToken: propToToken || KALYCHAIN_TOKENS[4], // USDT (now at index 4 after adding KSWAP and BNB)
+    fromToken: propFromToken || defaultFromToken,
+    toToken: propToToken || defaultToToken,
     fromAmount: '',
     toAmount: '',
     slippage: '0.5',
@@ -224,7 +136,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   // Check if user is using internal wallet and if it's on the correct chain
   const isUsingInternalWallet = () => connector?.id === 'kalyswap-internal';
   const internalWalletState = isUsingInternalWallet() ? internalWalletUtils.getState() : null;
-  const isWrongChain = isUsingInternalWallet() && internalWalletState?.activeWallet?.chainId !== 3888;
+  const isWrongChain = isUsingInternalWallet() && internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN;
   const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
 
   // Enhanced error handling
@@ -243,10 +155,10 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   } = useSwapErrorHandler({
     maxRetries: 3,
     onRetrySuccess: () => {
-      console.log('✅ Retry successful');
+      logger.debug('✅ Retry successful');
     },
     onRetryFailed: (error) => {
-      console.error('❌ Retry failed after max attempts:', error);
+      logger.error('❌ Retry failed after max attempts:', error);
     }
   });
 
@@ -331,7 +243,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       }
 
       // Ensure we're using a KalyChain wallet for swaps
-      if (internalWalletState.activeWallet.chainId !== 3888) {
+      if (internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN) {
         throw new Error('Swaps are only available on KalyChain. Please switch to a KalyChain wallet.');
       }
 
@@ -348,7 +260,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         args
       });
 
-      console.log('🔐 Sending contract transaction via GraphQL:', {
+      logger.debug('🔐 Sending contract transaction via GraphQL:', {
         to: contractAddress,
         data: data.slice(0, 10) + '...',
         value: value?.toString() || '0',
@@ -384,7 +296,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
               value: value?.toString() || '0',
               data: data,
               password: password,
-              chainId: 3888, // Force KalyChain for swaps
+              chainId: CHAIN_IDS.KALYCHAIN, // Force KalyChain for swaps
               gasLimit: '300000'
             }
           }
@@ -426,7 +338,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     warning: string | null;
   }>({ priceImpact: '0', severity: 'low', warning: null });
 
-  // Get quote from router contract or 1:1 for wrap/unwrap
+  // Get quote using DexService
   const getQuote = async (inputAmount: string, fromToken: Token, toToken: Token) => {
     if (!publicClient || !inputAmount || !fromToken || !toToken) return null;
 
@@ -434,83 +346,36 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       // Check if this is a wrap or unwrap operation
       if (isWrapOrUnwrapOperation(fromToken, toToken)) {
         // For wrap/unwrap operations, return 1:1 ratio
-        console.log('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
+        logger.debug('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
         return inputAmount;
       }
 
-      const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-      const routerContract = getContract({
-        address: routerAddress as `0x${string}`,
-        abi: ROUTER_ABI,
-        client: publicClient,
-      });
-
-      // Convert input amount to proper decimals
-      const amountIn = parseUnits(inputAmount, fromToken.decimals);
-
-      console.log('🔍 DEBUG: Starting quote calculation', {
+      logger.debug('🔍 Getting quote via DexService', {
         fromToken: fromToken.symbol,
         toToken: toToken.symbol,
         inputAmount,
-        amountIn: amountIn.toString(),
-        fromTokenAddress: fromToken.address,
-        toTokenAddress: toToken.address
+        chainId: DEFAULT_CHAIN_ID
       });
 
-      // Build path for swap - try direct pair first, fallback to WKLC routing
-      let path: string[];
-      let amounts: bigint[];
+      // Use DexService for quote - it handles routing internally
+      const quoteResult = await DexService.getQuote(
+        DEFAULT_CHAIN_ID,
+        fromToken,
+        toToken,
+        inputAmount,
+        publicClient
+      );
 
-      if (fromToken.isNative === true) {
-        path = [getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
-        console.log('🔍 DEBUG: Using KLC routing path:', path);
-      } else if (toToken.isNative === true) {
-        path = [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)];
-        console.log('🔍 DEBUG: Using KLC routing path:', path);
-      } else {
-        // For token-to-token swaps, try direct pair first
-        const directPath = [fromToken.address, toToken.address];
-        console.log('🔍 DEBUG: Trying direct pair path:', directPath);
-        
-        try {
-          amounts = await routerContract.read.getAmountsOut([amountIn, directPath]) as bigint[];
-          const outputAmount = amounts[amounts.length - 1];
-          const formattedOutput = formatUnits(outputAmount, toToken.decimals);
-          
-          console.log('✅ DEBUG: Direct pair successful', {
-            path: directPath,
-            amounts: amounts.map(a => a.toString()),
-            outputAmount: outputAmount.toString(),
-            formattedOutput,
-            price: `${parseFloat(formattedOutput) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
-          });
-          
-          return formattedOutput;
-        } catch (error) {
-          console.log('❌ DEBUG: Direct pair failed, trying WKLC routing:', error);
-          // Fall back to WKLC routing
-          path = [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
-          console.log('🔍 DEBUG: Using WKLC routing path:', path);
-        }
-      }
-
-      // Get amounts out (for non-direct paths or fallback)
-      console.log('🔍 DEBUG: Getting amounts out for path:', path);
-      amounts = await routerContract.read.getAmountsOut([amountIn, path]) as bigint[];
-      const outputAmount = amounts[amounts.length - 1];
-      const formattedOutput = formatUnits(outputAmount, toToken.decimals);
-      
-      console.log('✅ DEBUG: Quote calculation complete', {
-        path,
-        amounts: amounts.map(a => a.toString()),
-        outputAmount: outputAmount.toString(),
-        formattedOutput,
-        price: `${parseFloat(formattedOutput) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
+      logger.debug('✅ Quote received from DexService', {
+        amountOut: quoteResult.amountOut,
+        priceImpact: quoteResult.priceImpact,
+        route: quoteResult.route,
+        price: `${parseFloat(quoteResult.amountOut) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
       });
 
-      return formattedOutput;
+      return quoteResult.amountOut;
     } catch (error) {
-      console.error('❌ DEBUG: Error getting quote:', error);
+      logger.error('❌ Error getting quote from DexService:', error);
       return null;
     }
   };
@@ -533,7 +398,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           setSwapState(prev => ({ ...prev, toAmount: '' }));
         }
       } catch (err) {
-        console.error('Error fetching quote:', err);
+        logger.error('Error fetching quote:', err);
         setSwapState(prev => ({ ...prev, toAmount: '' }));
         // Only show error for quote fetching if it's a significant error
         // Minor quote errors shouldn't interrupt the user experience
@@ -577,7 +442,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     try {
       return await calculatePriceImpact(publicClient, inputAmount, fromToken, toToken);
     } catch (error) {
-      console.error('Error calculating enhanced price impact:', error);
+      logger.error('Error calculating enhanced price impact:', error);
       return { priceImpact: '0', severity: 'low' as const, warning: 'Error calculating price impact' };
     }
   };
@@ -597,7 +462,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       const gasCostInKLC = formatUnits(totalGasCost, 18);
       return parseFloat(gasCostInKLC).toFixed(4);
     } catch (error) {
-      console.error('Error estimating gas:', error);
+      logger.error('Error estimating gas:', error);
       return '0.001';
     }
   };
@@ -629,7 +494,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       setEstimatedGas(gasEstimate);
       setShowConfirmationModal(true);
     } catch (err) {
-      console.error('Error preparing swap confirmation:', err);
+      logger.error('Error preparing swap confirmation:', err);
       handleError(err);
     }
   };
@@ -680,32 +545,20 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       // Calculate deadline (current time + minutes)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + (parseInt(swapState.deadline) * 60));
 
-      // Build path for swap - try direct pair first, fallback to WKLC routing
-      let path: string[];
-      if (swapState.fromToken.isNative === true) {
-        path = [getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
-      } else if (swapState.toToken.isNative === true) {
-        path = [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)];
-      } else {
-        // For token-to-token swaps, try direct pair first
-        const directPath = [swapState.fromToken.address, swapState.toToken.address];
-        try {
-          // Test if direct path works by getting amounts out
-          const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-          const routerContract = getContract({
-            address: routerAddress as `0x${string}`,
-            abi: ROUTER_ABI,
-            client: publicClient,
-          });
-          await routerContract.read.getAmountsOut([amountIn, directPath]);
-          // If we get here, direct path works
-          path = directPath;
-        } catch (error) {
-          console.log('Direct pair failed for execution, using WKLC routing:', error);
-          // Fall back to WKLC routing
-          path = [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
-        }
+      // Get swap route using DexService (handles routing automatically)
+      logger.debug('🔍 Getting swap route from DexService...');
+      const path = await DexService.getSwapRoute(
+        DEFAULT_CHAIN_ID,
+        swapState.fromToken,
+        swapState.toToken,
+        publicClient
+      );
+
+      if (path.length === 0) {
+        throw new Error('No valid swap route found');
       }
+
+      logger.debug('✅ Swap route determined:', path);
 
       // Check if this is a wrap or unwrap operation
       const isWrap = isWrapOperation(swapState.fromToken, swapState.toToken);
@@ -715,7 +568,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       let swapHash: `0x${string}`;
 
       if (isWrap || isUnwrap) {
-        console.log(`🔄 Executing ${isWrap ? 'wrap' : 'unwrap'} operation:`, {
+        logger.debug(`🔄 Executing ${isWrap ? 'wrap' : 'unwrap'} operation:`, {
           fromToken: swapState.fromToken.symbol,
           toToken: swapState.toToken.symbol,
           amount: swapState.fromAmount,
@@ -729,7 +582,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
 
         if (isWrap) {
           // KLC → wKLC: Call deposit() with KLC value
-          console.log('🔄 Wrapping KLC to wKLC...');
+          logger.debug('🔄 Wrapping KLC to wKLC...');
           swapHash = await executeContractCall(
             wklcAddress,
             'deposit',
@@ -739,7 +592,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           );
         } else {
           // wKLC → KLC: First approve, then call withdraw()
-          console.log('📝 Approving wKLC for unwrap...');
+          logger.debug('📝 Approving wKLC for unwrap...');
 
           let approveHash: `0x${string}`;
           if (isUsingInternalWallet()) {
@@ -759,12 +612,12 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
             approveHash = await wklcContract.write.approve([wklcAddress, amountIn]);
           }
 
-          console.log(`📝 wKLC approval hash: ${approveHash}`);
+          logger.debug(`📝 wKLC approval hash: ${approveHash}`);
           await publicClient.waitForTransactionReceipt({ hash: approveHash });
-          console.log('✅ wKLC approved for unwrap');
+          logger.debug('✅ wKLC approved for unwrap');
 
           // Now unwrap wKLC → KLC
-          console.log('🔄 Unwrapping wKLC to KLC...');
+          logger.debug('🔄 Unwrapping wKLC to KLC...');
           swapHash = await executeContractCall(
             wklcAddress,
             'withdraw',
@@ -775,7 +628,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         }
       } else {
         // Regular DEX swap logic
-        console.log('🚀 Executing swap:', {
+        logger.debug('🚀 Executing swap:', {
           fromToken: swapState.fromToken.symbol,
           toToken: swapState.toToken.symbol,
           amountIn: swapState.fromAmount,
@@ -786,7 +639,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
 
         // Step 1: Approve token if not native
         if (swapState.fromToken.isNative !== true) {
-          console.log('📝 Approving token...');
+          logger.debug('📝 Approving token...');
 
           let approveHash: `0x${string}`;
 
@@ -810,14 +663,14 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
             approveHash = await tokenContract.write.approve([routerAddress, amountIn]);
           }
 
-          console.log(`📝 Approval transaction hash: ${approveHash}`);
+          logger.debug(`📝 Approval transaction hash: ${approveHash}`);
           await publicClient.waitForTransactionReceipt({ hash: approveHash });
-          console.log('✅ Token approved');
+          logger.debug('✅ Token approved');
         }
 
         // Step 2: Execute swap
         setCurrentStep('swapping');
-        console.log('🔄 Executing swap...');
+        logger.debug('🔄 Executing swap...');
 
         if (swapState.fromToken.isNative === true) {
           // KLC to Token
@@ -844,8 +697,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         }
       }
 
-      console.log(`🔄 Swap transaction hash: ${swapHash}`);
-      console.log('⏳ Waiting for transaction confirmation...');
+      logger.debug(`🔄 Swap transaction hash: ${swapHash}`);
+      logger.debug('⏳ Waiting for transaction confirmation...');
 
       // Store transaction hash for error handling
       setCurrentTransactionHash(swapHash);
@@ -880,7 +733,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: swapHash });
-      console.log(`✅ Swap confirmed in block ${receipt.blockNumber}`);
+      logger.debug(`✅ Swap confirmed in block ${receipt.blockNumber}`);
 
       // Update transaction status to confirmed
       updateTransactionStatus(swapHash, 'confirmed', Number(receipt.blockNumber));
@@ -898,7 +751,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         toAmount: ''
       }));
 
-      console.log('🎉 Swap completed successfully!');
+      logger.debug('🎉 Swap completed successfully!');
     };
 
     // Execute with error handling and retry capability
@@ -906,7 +759,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       setRetryOperation(swapOperation);
       await executeWithErrorHandling(swapOperation, { autoRetry: true });
     } catch (err) {
-      console.error('❌ Error executing swap:', err);
+      logger.error('❌ Error executing swap:', err);
 
       // Mark transaction as failed if we have a hash
       if (currentTransactionHash) {
@@ -1152,7 +1005,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
             onReset={reset}
             onConnectWallet={() => {
               // This will be handled by the existing wallet connection logic
-              console.log('Connect wallet requested');
+              logger.debug('Connect wallet requested');
             }}
             isRetrying={isRetrying}
           />
@@ -1252,7 +1105,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           }
         }}
         selectedToken={swapState.fromToken}
-        tokens={KALYCHAIN_TOKENS}
+        tokens={availableTokens}
         title="Select a token"
         getFormattedBalance={getFormattedBalance}
       />
@@ -1268,7 +1121,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           }
         }}
         selectedToken={swapState.toToken}
-        tokens={KALYCHAIN_TOKENS}
+        tokens={availableTokens}
         title="Select a token"
         getFormattedBalance={getFormattedBalance}
       />

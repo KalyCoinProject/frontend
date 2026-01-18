@@ -1,3 +1,4 @@
+import { walletLogger } from '@/lib/logger';
 import { createConnector } from 'wagmi'
 import { Address, Hash, TransactionRequest } from 'viem'
 import { kalychain } from '@/config/chains'
@@ -36,7 +37,7 @@ const saveStateToStorage = (state: InternalWalletState) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   } catch (error) {
-    console.warn('Failed to save internal wallet state:', error)
+    walletLogger.warn('Failed to save internal wallet state:', error)
   }
 }
 
@@ -64,7 +65,7 @@ const loadStateFromStorage = (): InternalWalletState => {
       }
     }
   } catch (error) {
-    console.warn('Failed to load internal wallet state:', error)
+    walletLogger.warn('Failed to load internal wallet state:', error)
   }
 
   return {
@@ -100,7 +101,7 @@ export const internalWalletConnector = createConnector((config) => {
     type: 'internalWallet' as const,
     icon: '/icons/kalyswap-wallet.svg',
 
-    async connect({ chainId } = {}) {
+    async connect<withCapabilities extends boolean = false>({ chainId }: { chainId?: number; isReconnecting?: boolean; withCapabilities?: boolean | withCapabilities } = {}) {
       try {
         // Initialize client state if not already done
         initializeClientState()
@@ -174,10 +175,11 @@ export const internalWalletConnector = createConnector((config) => {
           }
         }))
 
+        // Return type compatible with wagmi's withCapabilities conditional type
         return {
-          accounts: [internalWalletState.activeWallet!.address] as const,
+          accounts: [internalWalletState.activeWallet!.address] as readonly `0x${string}`[],
           chainId: chainId || internalWalletState.activeWallet!.chainId
-        }
+        } as any
       } catch (error) {
         throw new Error(`Failed to connect internal wallet: ${error instanceof Error ? error.message : String(error)}`)
       }

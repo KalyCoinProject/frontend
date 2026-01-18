@@ -1,3 +1,4 @@
+import { contractLogger } from '@/lib/logger';
 import { ethers } from 'ethers'
 import liquidityPoolManagerV2ABI from '@/config/abis/dex/liqudityPoolManagerV2ABI.json'
 import treasuryVesterABI from '@/config/abis/dex/treasuryVesterABI.json'
@@ -17,7 +18,7 @@ export class ContractEncoder {
     try {
       return this.liquidityManagerInterface.encodeFunctionData(functionName, params)
     } catch (error) {
-      console.error(`Error encoding ${functionName}:`, error)
+      contractLogger.error(`Error encoding ${functionName}:`, error)
       return '0x'
     }
   }
@@ -29,7 +30,7 @@ export class ContractEncoder {
     try {
       return this.treasuryVesterInterface.encodeFunctionData(functionName, params)
     } catch (error) {
-      console.error(`Error encoding ${functionName}:`, error)
+      contractLogger.error(`Error encoding ${functionName}:`, error)
       return '0x'
     }
   }
@@ -79,7 +80,7 @@ export class ContractEncoder {
         args: Array.from(decoded.args)
       }
     } catch (error) {
-      console.error('Error decoding liquidity manager call:', error)
+      contractLogger.error('Error decoding liquidity manager call:', error)
       return null
     }
   }
@@ -92,7 +93,7 @@ export class ContractEncoder {
         args: Array.from(decoded.args)
       }
     } catch (error) {
-      console.error('Error decoding treasury vester call:', error)
+      contractLogger.error('Error decoding treasury vester call:', error)
       return null
     }
   }
@@ -117,7 +118,7 @@ export async function estimateContractGas(
     // Add 20% buffer for safety
     return gasEstimate.mul(120).div(100)
   } catch (error) {
-    console.error('Error estimating gas:', error)
+    contractLogger.error('Error estimating gas:', error)
     // Return a reasonable default gas limit
     return ethers.BigNumber.from('200000')
   }
@@ -132,7 +133,7 @@ export async function getCurrentGasPrice(provider: ethers.providers.Provider): P
     // Add 10% buffer for faster confirmation
     return gasPrice.mul(110).div(100)
   } catch (error) {
-    console.error('Error getting gas price:', error)
+    contractLogger.error('Error getting gas price:', error)
     // Return a reasonable default (20 gwei)
     return ethers.utils.parseUnits('20', 'gwei')
   }

@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import { isAddress, parseUnits } from 'viem';
 import { useBridgeContext } from './useBridgeContext';
 import { useWallet } from '../useWallet';
+import { bridgeLogger } from '@/lib/logger';
 
 export interface BridgeFormValues {
   originChain: string;
@@ -108,7 +109,7 @@ export function useBridgeValidation() {
           }
 
         } catch (err) {
-          console.error('Validation error:', err);
+          bridgeLogger.error('Validation error:', err);
           newErrors.form = err instanceof Error ? err.message : 'Validation failed';
         }
       }

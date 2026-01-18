@@ -1,3 +1,5 @@
+import { CHAIN_IDS } from '@/config/chains';
+import { dexLogger } from '@/lib/logger';
 // KalySwap DEX service implementation
 // Handles all KalySwap-specific operations on KalyChain
 
@@ -23,7 +25,7 @@ export class KalySwapService extends BaseDexService {
   }
 
   getChainId(): number {
-    return 3888; // KalyChain
+    return CHAIN_IDS.KALYCHAIN; // KalyChain
   }
 
   /**
@@ -52,7 +54,7 @@ export class KalySwapService extends BaseDexService {
   async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<QuoteResult> {
     // Check if this is a wrap or unwrap operation
     if (this.isWrapOperation(tokenIn, tokenOut) || this.isUnwrapOperation(tokenIn, tokenOut)) {
-      console.log('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
+      dexLogger.debug('🔄 Wrap/Unwrap operation detected - returning 1:1 ratio');
 
       return {
         amountOut: amountIn, // 1:1 ratio
@@ -88,7 +90,7 @@ export class KalySwapService extends BaseDexService {
 
       if (isWrap) {
         // KLC → WKLC: Call deposit() with KLC value
-        console.log('🔄 Wrapping KLC to WKLC via WKLC contract...');
+        dexLogger.debug('🔄 Wrapping KLC to WKLC via WKLC contract...');
 
         // WKLC ABI for deposit function
         const WKLC_ABI = [
@@ -111,12 +113,12 @@ export class KalySwapService extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Wrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Wrap transaction sent: ${txHash}`);
         return txHash;
 
       } else if (isUnwrap) {
         // WKLC → KLC: Call withdraw()
-        console.log('🔄 Unwrapping WKLC to KLC via WKLC contract...');
+        dexLogger.debug('🔄 Unwrapping WKLC to KLC via WKLC contract...');
 
         // WKLC ABI for withdraw function
         const WKLC_ABI = [
@@ -144,7 +146,7 @@ export class KalySwapService extends BaseDexService {
           chain: undefined
         });
 
-        console.log(`✅ Unwrap transaction sent: ${txHash}`);
+        dexLogger.debug(`✅ Unwrap transaction sent: ${txHash}`);
         return txHash;
       }
 
@@ -214,7 +216,7 @@ export class KalySwapService extends BaseDexService {
 
       return txHash;
     } catch (error) {
-      console.error('KalySwap executeSwap error:', error);
+      dexLogger.error('KalySwap executeSwap error:', error);
       if (error instanceof DexError) {
         throw error;
       }
@@ -250,7 +252,7 @@ export class KalySwapService extends BaseDexService {
 
       return usdtReserve / klcReserve;
     } catch (error) {
-      console.error('Error getting KLC price:', error);
+      dexLogger.error('Error getting KLC price:', error);
       return 0;
     }
   }
@@ -286,7 +288,7 @@ export class KalySwapService extends BaseDexService {
 
       return kswapPriceInKLC * klcPriceUSD;
     } catch (error) {
-      console.error('Error getting KSWAP price:', error);
+      dexLogger.error('Error getting KSWAP price:', error);
       return 0;
     }
   }

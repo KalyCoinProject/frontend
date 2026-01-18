@@ -17,6 +17,7 @@ import {
 import { ProjectData } from '@/hooks/launchpad/useProjectDetails'
 import { useParticipation } from '@/hooks/launchpad/useParticipation'
 import { useWallet } from '@/hooks/useWallet'
+import { launchpadLogger } from '@/lib/logger'
 
 interface UserContributionsProps {
   projectData: ProjectData
@@ -73,7 +74,7 @@ export default function UserContributions({
       await claimTokens(projectData.contractAddress, projectData.type || 'presale')
       onRefresh?.()
     } catch (error) {
-      console.error('Claim failed:', error)
+      launchpadLogger.error('Claim failed:', error)
     }
   }
 
@@ -83,7 +84,7 @@ export default function UserContributions({
       await claimRefund(projectData.contractAddress, projectData.type || 'presale')
       onRefresh?.()
     } catch (error) {
-      console.error('Refund failed:', error)
+      launchpadLogger.error('Refund failed:', error)
     }
   }
 

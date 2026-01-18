@@ -1,5 +1,7 @@
 'use client';
 
+import { logger } from '@/lib/logger';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -39,7 +41,7 @@ export default function Header() {
         internalWalletUtils.addEventListener('accountsChanged', handleWalletChange);
         internalWalletUtils.addEventListener('chainChanged', handleWalletChange);
       } catch (error) {
-        console.warn('Failed to set up internal wallet event listeners:', error);
+        logger.warn('Failed to set up internal wallet event listeners:', error);
       }
     }, 100);
 

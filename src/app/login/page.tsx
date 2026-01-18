@@ -1,5 +1,7 @@
 'use client';
 
+import { logger } from '@/lib/logger';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -81,7 +83,7 @@ export default function LoginPage() {
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err) {
-      console.error('Login error:', err);
+      logger.error('Login error:', err);
 
       // Parse error using auth utilities
       import('@/utils/auth').then(({ parseAuthError }) => {

@@ -28,6 +28,7 @@ import { ProjectData } from '@/hooks/launchpad/useProjectDetails'
 import { useParticipation } from '@/hooks/launchpad/useParticipation'
 import { useWallet } from '@/hooks/useWallet'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { launchpadLogger } from '@/lib/logger'
 import { parseEther, formatEther, formatUnits } from 'viem'
 import { isNativeToken } from '@/config/contracts'
 
@@ -118,7 +119,7 @@ export default function ParticipationForm({
         const limits = await getContributionLimits(projectData.contractAddress, projectData.type || 'presale')
         setContributionLimits(limits)
       } catch (error) {
-        console.error('Error fetching user data:', error)
+        launchpadLogger.error('Error fetching user data:', error)
       }
     }
 
@@ -137,7 +138,7 @@ export default function ParticipationForm({
         // This is a placeholder - actual implementation will call contract
         setGasEstimate('0.001')
       } catch (error) {
-        console.error('Gas estimation failed:', error)
+        launchpadLogger.error('Gas estimation failed:', error)
         setGasEstimate('0.002') // Fallback estimate
       }
     }
@@ -198,7 +199,7 @@ export default function ParticipationForm({
       onSuccess?.()
 
     } catch (error) {
-      console.error('Participation failed:', error)
+      launchpadLogger.error('Participation failed:', error)
       onError?.(error instanceof Error ? error.message : 'Transaction failed')
     }
   }

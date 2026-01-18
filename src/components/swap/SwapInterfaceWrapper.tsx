@@ -2,21 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { Card, CardContent } from '@/components/ui/card';
+import { Token } from '@/config/dex/types';
 
-
-
-
-
-// Token interface
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
 
 // Props interface
 interface SwapInterfaceWrapperProps {

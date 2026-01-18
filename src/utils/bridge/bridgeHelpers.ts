@@ -1,3 +1,4 @@
+import { contractLogger } from '@/lib/logger';
 // Bridge Helper Functions - Utility functions for bridge operations
 // This file contains utility functions adapted from Hyperlane bridge UI
 
@@ -213,7 +214,7 @@ export const bridgeHelpers = {
 
       return null;
     } catch (error) {
-      console.error('Error extracting message ID from receipt:', error);
+      contractLogger.error('Error extracting message ID from receipt:', error);
       return null;
     }
   },
@@ -239,7 +240,7 @@ export const bridgeHelpers = {
         return success;
       }
     } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
+      contractLogger.error('Failed to copy to clipboard:', error);
       return false;
     }
   },

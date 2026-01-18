@@ -9,6 +9,7 @@ import { ClaimRewardModalProps } from '@/types/farming'
 import { formatNumber } from '@/lib/utils'
 import { useFarmingContracts } from '@/hooks/farming/useFarmingContracts'
 import TokenPairDisplay from './TokenPairDisplay'
+import { farmingLogger } from '@/lib/logger'
 
 export default function ClaimRewardModal({
   isOpen,
@@ -51,7 +52,7 @@ export default function ClaimRewardModal({
       
       if (hash) {
         setTxHash(hash)
-        console.log('✅ Claim rewards transaction submitted:', hash)
+        farmingLogger.debug('✅ Claim rewards transaction submitted:', hash)
 
         // Call onSuccess to refresh data since modal is already closed
         // Note: ClaimRewardModal doesn't have onSuccess prop, but we should add it
@@ -61,7 +62,7 @@ export default function ClaimRewardModal({
         throw new Error('Transaction failed. Please try again.')
       }
     } catch (err) {
-      console.error('Claim rewards error:', err)
+      farmingLogger.error('Claim rewards error:', err)
       // Since modal is closed, we can't show the error in the modal
       // Could be improved with toast notifications or other error handling
       alert(err instanceof Error ? err.message : 'Failed to claim rewards')

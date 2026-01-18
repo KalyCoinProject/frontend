@@ -6,10 +6,13 @@
 
 'use client';
 
+import { CHAIN_IDS } from '@/config/chains';
+
 import { useState, useEffect, useCallback } from 'react';
 import { tokenListService } from '@/services/tokenListService';
 import { Token } from '@/config/dex/types';
 import { KALYCHAIN_TOKENS } from '@/config/dex/tokens/kalychain';
+import { logger } from '@/lib/logger';
 
 // Enhanced token interface with additional metadata from subgraph
 export interface EnhancedToken extends Token {
@@ -17,7 +20,7 @@ export interface EnhancedToken extends Token {
   totalLiquidity?: string;
   derivedKLC?: string;
   txCount?: string;
-  priceUSD?: number;
+  // priceUSD is inherited from Token as string | undefined
 }
 
 // Hook return interface - matches existing useTokens interface
@@ -44,14 +47,14 @@ export interface UseTokenListsOptions {
  */
 export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenListsReturn {
   // Use provided chainId or fallback to KalyChain
-  const chainId = options.chainId || 3888;
+  const chainId = options.chainId || CHAIN_IDS.KALYCHAIN;
   const [tokens, setTokens] = useState<EnhancedToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Debug: Log chainId changes
   useEffect(() => {
-    console.log('🔗 useTokenLists chainId changed:', {
+    logger.debug('useTokenLists chainId changed:', {
       providedChainId: options.chainId,
       effectiveChainId: chainId
     });
@@ -64,7 +67,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
    */
   const fetchTokensFromSubgraph = useCallback(async (): Promise<EnhancedToken[]> => {
     try {
-      console.log('🔍 Fetching tokens from DEX subgraph...');
+      logger.debug('Fetching tokens from DEX subgraph...');
 
       const response = await fetch('/api/graphql', {
         method: 'POST',
@@ -98,7 +101,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
         const result = await response.json();
         
         if (result.errors) {
-          console.error('GraphQL errors:', result.errors);
+          logger.error('GraphQL errors:', result.errors);
           return [];
         }
 
@@ -118,14 +121,14 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
             priceUSD: undefined // Price calculation requires real-time KLC price from market
           }));
 
-          console.log(`✅ Fetched ${subgraphTokens.length} tokens from subgraph`);
+          logger.debug(`Fetched ${subgraphTokens.length} tokens from subgraph`);
           return subgraphTokens;
         }
       }
-      
+
       return [];
     } catch (err) {
-      console.error('❌ Error fetching tokens from subgraph:', err);
+      logger.error('Error fetching tokens from subgraph:', err);
       return [];
     }
   }, [chainId]);
@@ -191,9 +194,9 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
 
       // Define native tokens for each supported chain
       switch (chainId) {
-        case 3888: // KalyChain
+        case CHAIN_IDS.KALYCHAIN: // KalyChain
           nativeToken = {
-            chainId: 3888,
+            chainId: CHAIN_IDS.KALYCHAIN,
             address: '0x0000000000000000000000000000000000000000',
             decimals: 18,
             name: 'KalyCoin',
@@ -228,12 +231,12 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
           break;
 
         default:
-          console.log(`⚠️ No native token defined for chain ${chainId}`);
+          logger.debug(`No native token defined for chain ${chainId}`);
           break;
       }
 
       if (nativeToken) {
-        console.log(`✅ Adding native token ${nativeToken.symbol} for chain ${chainId}`);
+        logger.debug(`Adding native token ${nativeToken.symbol} for chain ${chainId}`);
         return [nativeToken, ...tokens];
       }
     }
@@ -249,14 +252,14 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
       setLoading(true);
       setError(null);
 
-      console.log(`🚀 Loading tokens for chain ${chainId}`);
+      logger.debug(`Loading tokens for chain ${chainId}`);
 
       let tokenListTokens: Token[];
 
       // For KalyChain, use local token list directly (no network calls needed)
-      if (chainId === 3888) {
+      if (chainId === CHAIN_IDS.KALYCHAIN) {
         tokenListTokens = [...KALYCHAIN_TOKENS];
-        console.log(`📋 Using local KalyChain token list: ${tokenListTokens.length} tokens`);
+        logger.debug(`Using local KalyChain token list: ${tokenListTokens.length} tokens`);
       } else {
         // For other chains, fetch from external sources
         tokenListTokens = await tokenListService.getTokensForChain(chainId);
@@ -265,7 +268,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
         if (chainId === 56) {
           const hasBUSD = tokenListTokens.some(t => t.symbol === 'BUSD');
           if (!hasBUSD) {
-            console.log('⚠️ BUSD not in token list, adding manually');
+            logger.debug('BUSD not in token list, adding manually');
             tokenListTokens.push({
               chainId: 56,
               address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
@@ -287,19 +290,19 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
       // Add native token if missing
       allTokens = addNativeTokenIfMissing(allTokens);
 
-      console.log(`✅ Successfully loaded ${allTokens.length} tokens for chain ${chainId}`);
+      logger.debug(`Successfully loaded ${allTokens.length} tokens for chain ${chainId}`);
       setTokens(allTokens);
 
     } catch (err) {
-      console.error('❌ Error loading tokens:', err);
+      logger.error('Error loading tokens:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tokens');
 
       // Fallback: use local tokens for KalyChain, or try service for other chains
       try {
         let fallbackTokens: Token[];
-        if (chainId === 3888) {
+        if (chainId === CHAIN_IDS.KALYCHAIN) {
           fallbackTokens = [...KALYCHAIN_TOKENS];
-          console.log(`⚠️ Using local KalyChain tokens as fallback: ${fallbackTokens.length} tokens`);
+          logger.warn(`Using local KalyChain tokens as fallback: ${fallbackTokens.length} tokens`);
         } else {
           fallbackTokens = await tokenListService.getTokensForChain(chainId);
         }
@@ -314,9 +317,9 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
         }));
 
         setTokens(addNativeTokenIfMissing(enhancedFallbackTokens));
-        console.log(`⚠️ Using fallback tokens: ${enhancedFallbackTokens.length} tokens loaded`);
+        logger.warn(`Using fallback tokens: ${enhancedFallbackTokens.length} tokens loaded`);
       } catch (fallbackErr) {
-        console.error('❌ Fallback token loading also failed:', fallbackErr);
+        logger.error('Fallback token loading also failed:', fallbackErr);
         setTokens([]);
       }
     } finally {

@@ -1,3 +1,4 @@
+import { swapLogger } from '@/lib/logger';
 import { useState, useEffect } from 'react';
 
 // GraphQL queries for backend API (which queries the DEX subgraph)
@@ -89,7 +90,7 @@ export function useDexData({
         userAddress: userAddress?.toLowerCase()
       };
 
-      console.log('Fetching DEX transactions via backend API:', variables);
+      swapLogger.debug('Fetching DEX transactions via backend API:', variables);
 
       const response = await fetch('/api/graphql', {
         method: 'POST',
@@ -99,11 +100,11 @@ export function useDexData({
 
       const result = await response.json();
       if (result.errors) {
-        console.error('GraphQL errors:', result.errors);
+        swapLogger.error('GraphQL errors:', result.errors);
         throw new Error(result.errors[0].message);
       }
 
-      console.log('DEX subgraph response:', result.data);
+      swapLogger.debug('DEX subgraph response:', result.data);
 
       // Process the swap data from subgraph
       let swapTransactions: DexTransaction[] = [];
@@ -124,11 +125,11 @@ export function useDexData({
         }));
       }
 
-      console.log(`Processed ${swapTransactions.length} swap transactions from subgraph`);
+      swapLogger.debug(`Processed ${swapTransactions.length} swap transactions from subgraph`);
 
       // If no data from subgraph, fall back to mock data for development
       if (swapTransactions.length === 0) {
-        console.log('No data from subgraph, using mock data for development');
+        swapLogger.debug('No data from subgraph, using mock data for development');
         swapTransactions = getMockTransactions(userAddress);
       }
 
@@ -144,7 +145,7 @@ export function useDexData({
       setTotalCount(filteredTransactions.length);
 
     } catch (err) {
-      console.error('Error fetching DEX transactions:', err);
+      swapLogger.error('Error fetching DEX transactions:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
 
       // Fall back to mock data on error

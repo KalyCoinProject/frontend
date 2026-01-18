@@ -1,3 +1,4 @@
+import { dexLogger } from '@/lib/logger';
 /**
  * Token List Service - Dynamic token list fetching and management
  * Implements PancakeSwap-style token list loading with caching and validation
@@ -53,11 +54,11 @@ class TokenListService {
       // Check cache first
       const cached = this.cache.get(url);
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-        console.log(`📋 Using cached token list from ${url}`);
+        dexLogger.debug(`📋 Using cached token list from ${url}`);
         return cached.data;
       }
 
-      console.log(`🔍 Fetching token list from ${url}`);
+      dexLogger.debug(`🔍 Fetching token list from ${url}`);
 
       // For /api/ URLs, use relative paths in browser (Next.js rewrites handle proxying)
       // For server-side, use the configured API URL
@@ -75,7 +76,7 @@ class TokenListService {
         apiUrl = url;
       }
 
-      console.log(`🔍 Resolved API URL: ${apiUrl}`);
+      dexLogger.debug(`🔍 Resolved API URL: ${apiUrl}`);
 
       const tokenList = await fetchJSON<TokenList>(apiUrl, {
         timeout: this.REQUEST_TIMEOUT,
@@ -94,15 +95,15 @@ class TokenListService {
           timestamp: Date.now() 
         });
         
-        console.log(`✅ Successfully fetched and cached token list: ${tokenList.name} (${tokenList.tokens.length} tokens)`);
+        dexLogger.debug(`✅ Successfully fetched and cached token list: ${tokenList.name} (${tokenList.tokens.length} tokens)`);
         return tokenList;
       } else {
-        console.error(`❌ Invalid token list schema from ${url}`);
+        dexLogger.error(`❌ Invalid token list schema from ${url}`);
         return null;
       }
       
     } catch (error) {
-      console.error(`❌ Failed to fetch token list from ${url}:`, error);
+      dexLogger.error(`❌ Failed to fetch token list from ${url}:`, error);
       return null;
     }
   }
@@ -115,11 +116,11 @@ class TokenListService {
     const enabledConfigs = configs.filter(c => c.enabled);
     
     if (enabledConfigs.length === 0) {
-      console.warn(`⚠️ No token list configurations found for chain ${chainId}`);
+      dexLogger.warn(`⚠️ No token list configurations found for chain ${chainId}`);
       return [];
     }
 
-    console.log(`🔍 Loading tokens for chain ${chainId} from ${enabledConfigs.length} token lists`);
+    dexLogger.debug(`🔍 Loading tokens for chain ${chainId} from ${enabledConfigs.length} token lists`);
 
     const allTokens: Array<Token & { priority: number }> = [];
     
@@ -133,14 +134,14 @@ class TokenListService {
           .map(token => ({ ...token, priority: config.priority }));
         
         allTokens.push(...chainTokens);
-        console.log(`📋 Added ${chainTokens.length} tokens from ${config.name}`);
+        dexLogger.debug(`📋 Added ${chainTokens.length} tokens from ${config.name}`);
       }
     }
 
     // Remove duplicates, prioritizing higher priority lists
     const deduplicatedTokens = this.deduplicateTokens(allTokens);
     
-    console.log(`✅ Loaded ${deduplicatedTokens.length} unique tokens for chain ${chainId}`);
+    dexLogger.debug(`✅ Loaded ${deduplicatedTokens.length} unique tokens for chain ${chainId}`);
     return deduplicatedTokens;
   }
 
@@ -157,10 +158,10 @@ class TokenListService {
   clearCache(url?: string): void {
     if (url) {
       this.cache.delete(url);
-      console.log(`🗑️ Cleared cache for ${url}`);
+      dexLogger.debug(`🗑️ Cleared cache for ${url}`);
     } else {
       this.cache.clear();
-      console.log('🗑️ Cleared all token list cache');
+      dexLogger.debug('🗑️ Cleared all token list cache');
     }
   }
 

@@ -10,6 +10,7 @@ import { formatNumber, formatPercentage } from '@/lib/utils'
 import { DoubleSideStakingInfo } from '@/types/farming'
 import TokenPairDisplay from './TokenPairDisplay'
 import RewardTokens from './RewardTokens'
+import { farmingLogger } from '@/lib/logger'
 
 interface FarmCardProps {
   stakingInfo: DoubleSideStakingInfo
@@ -59,7 +60,7 @@ export default function FarmCard({ stakingInfo, version }: FarmCardProps) {
 
   // Debug logging
   const pairName = `${stakingInfo.tokens[0].symbol}-${stakingInfo.tokens[1].symbol}`
-  console.log(`🃏 FarmCard ${pairName}:`, {
+  farmingLogger.debug(`🃏 FarmCard ${pairName}:`, {
     isPeriodFinished,
     periodFinish: stakingInfo.periodFinish,
     periodFinishTimestamp: stakingInfo.periodFinish ? stakingInfo.periodFinish.getTime() / 1000 : 0,

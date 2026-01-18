@@ -3,18 +3,19 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { 
-  DollarSign, 
-  Target, 
-  AlertCircle, 
-  Clock, 
-  CheckCircle, 
+import {
+  DollarSign,
+  Target,
+  AlertCircle,
+  Clock,
+  CheckCircle,
   TrendingUp,
-  RefreshCw 
+  RefreshCw
 } from 'lucide-react'
 import { ProjectData } from '@/hooks/launchpad/useProjectDetails'
 import { useWallet } from '@/hooks/useWallet'
 import ParticipationForm from './ParticipationForm'
+import { launchpadLogger } from '@/lib/logger'
 
 interface ProjectProgressProps {
   projectData: ProjectData
@@ -169,7 +170,7 @@ export default function ProjectProgress({
               <ParticipationForm
                 projectData={projectData}
                 onSuccess={onRefresh}
-                onError={(error) => console.error('Participation error:', error)}
+                onError={(error) => launchpadLogger.error('Participation error:', error)}
               />
             </div>
           ) : projectData.status !== 'Pending' && (
@@ -178,7 +179,7 @@ export default function ProjectProgress({
               disabled={!isConnected}
               onClick={() => {
                 // TODO: Implement claim/refund logic
-                console.log('Action button clicked:', projectData.status)
+                launchpadLogger.debug('Action button clicked:', projectData.status)
               }}
             >
               {isConnected ? statusInfo.buttonText : 'Connect Wallet'}

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useWallet } from '@/hooks/useWallet'
 import { DoubleSideStaking } from '@/types/farming'
 import { FARMING_CONFIG } from '@/config/farming'
+import { farmingLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 export function useFarmingPools() {
   const { chainId } = useWallet()
@@ -18,7 +20,7 @@ export function useFarmingPools() {
         setError(null)
 
         // Get pools from config for the current chain (default to KalyChain)
-        const currentChainId = chainId || 3888
+        const currentChainId = chainId || CHAIN_IDS.KALYCHAIN
         const chainPools = FARMING_CONFIG.DOUBLE_SIDE_STAKING_REWARDS_INFO[currentChainId] || []
         
         // Flatten all versions and filter active pools
@@ -29,7 +31,7 @@ export function useFarmingPools() {
 
         setPools(allPools)
       } catch (err) {
-        console.error('Error fetching farming pools:', err)
+        farmingLogger.error('Error fetching farming pools:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch farming pools')
       } finally {
         setIsLoading(false)
@@ -44,7 +46,7 @@ export function useFarmingPools() {
     isLoading,
     error,
     refetch: () => {
-      const currentChainId = chainId || 3888
+      const currentChainId = chainId || CHAIN_IDS.KALYCHAIN
       const chainPools = FARMING_CONFIG.DOUBLE_SIDE_STAKING_REWARDS_INFO[currentChainId] || []
       const allPools = chainPools.flat()
       setPools(allPools)

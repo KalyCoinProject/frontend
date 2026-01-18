@@ -3,13 +3,13 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { internalWalletUtils } from '@/connectors/internalWallet'
 import { useEffect, useState } from 'react'
-import { kalychain } from '@/config/chains'
+import { kalychain, CHAIN_IDS } from '@/config/chains'
 import { arbitrum, bsc } from 'viem/chains'
 
 // Helper function to get chain name
 const getChainName = (chainId: number): string => {
   switch (chainId) {
-    case 3888: return 'KalyChain'
+    case CHAIN_IDS.KALYCHAIN: return 'KalyChain'
     case 56: return 'BSC'
     case 42161: return 'Arbitrum'
     default: return `Chain ${chainId}`
@@ -19,7 +19,7 @@ const getChainName = (chainId: number): string => {
 // Helper function to get chain symbol
 const getChainSymbol = (chainId: number): string => {
   switch (chainId) {
-    case 3888: return 'KLC'
+    case CHAIN_IDS.KALYCHAIN: return 'KLC'
     case 56: return 'BNB'
     case 42161: return 'ETH'
     default: return 'ETH'

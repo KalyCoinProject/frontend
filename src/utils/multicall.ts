@@ -3,6 +3,8 @@
 import { ethers, Contract, BigNumber } from 'ethers'
 import { getContractAddress } from '@/config/contracts'
 import MULTICALL_ABI from '@/config/abis/multicall.json'
+import { contractLogger } from '@/lib/logger'
+import { CHAIN_IDS } from '@/config/chains'
 
 export interface MulticallRequest {
   target: string
@@ -32,7 +34,7 @@ export class MulticallService {
   private multicallContract: Contract
   private chainId: number
 
-  constructor(provider: ethers.providers.Provider, chainId: number = 3888) {
+  constructor(provider: ethers.providers.Provider, chainId: number = CHAIN_IDS.KALYCHAIN) {
     this.provider = provider
     this.chainId = chainId
     
@@ -45,8 +47,8 @@ export class MulticallService {
    */
   async aggregate(calls: MulticallRequest[]): Promise<MulticallResult[]> {
     try {
-      console.log(`🔄 Executing multicall with ${calls.length} calls`)
-      console.log(`📋 Multicall targets:`, calls.map(c => `${c.target}:${c.functionName}`))
+      contractLogger.debug(`🔄 Executing multicall with ${calls.length} calls`)
+      contractLogger.debug(`📋 Multicall targets:`, calls.map(c => `${c.target}:${c.functionName}`))
 
       const { returnData } = await this.multicallContract.aggregate(
         calls.map(call => ({
@@ -55,15 +57,15 @@ export class MulticallService {
         }))
       )
 
-      console.log(`✅ Multicall successful, got ${returnData.length} results`)
+      contractLogger.debug(`✅ Multicall successful, got ${returnData.length} results`)
       return returnData.map((data: string, index: number) => ({
         success: true,
         returnData: data,
         functionName: calls[index].functionName
       }))
     } catch (error) {
-      console.error('❌ Multicall failed:', error)
-      console.error('📋 Failed calls:', calls.map(c => `${c.target}:${c.functionName}`))
+      contractLogger.error('❌ Multicall failed:', error)
+      contractLogger.error('📋 Failed calls:', calls.map(c => `${c.target}:${c.functionName}`))
       // Return failed results for all calls
       return calls.map(() => ({
         success: false,
@@ -91,7 +93,7 @@ export class MulticallService {
       // Decode results
       return results.map((result, index) => {
         if (!result.success) {
-          console.warn(`❌ Call ${calls[index].functionName} failed`)
+          contractLogger.warn(`❌ Call ${calls[index].functionName} failed`)
           return null
         }
 
@@ -107,12 +109,12 @@ export class MulticallService {
             )[0] // Return first result for single return values
           }
         } catch (decodeError) {
-          console.error(`❌ Failed to decode ${calls[index].functionName}:`, decodeError)
+          contractLogger.error(`❌ Failed to decode ${calls[index].functionName}:`, decodeError)
           return null
         }
       })
     } catch (error) {
-      console.error('❌ Batch contract calls failed:', error)
+      contractLogger.error('❌ Batch contract calls failed:', error)
       return calls.map(() => null)
     }
   }
@@ -154,7 +156,7 @@ export class MulticallService {
  */
 export function createMulticallService(
   provider: ethers.providers.Provider,
-  chainId: number = 3888
+  chainId: number = CHAIN_IDS.KALYCHAIN
 ): MulticallService {
   return new MulticallService(provider, chainId)
 }
@@ -168,7 +170,7 @@ export async function batchFarmingCalls(
   stakingContracts: Contract[],
   pairAddresses: string[],
   userAddress?: string,
-  chainId: number = 3888
+  chainId: number = CHAIN_IDS.KALYCHAIN
 ): Promise<{
   liquidityManagerResults: any[]
   stakingResults: any[][]
@@ -209,12 +211,12 @@ export async function batchFarmingCalls(
     callIndex += 5
   })
 
-  console.log(`🚀 Executing SINGLE multicall with ${allCalls.length} total calls (${pairAddresses.length} pairs + ${stakingContracts.length} staking contracts)`)
+  contractLogger.debug(`🚀 Executing SINGLE multicall with ${allCalls.length} total calls (${pairAddresses.length} pairs + ${stakingContracts.length} staking contracts)`)
 
   // Execute ONE multicall for everything
   const allResults = await multicall.batchContractCalls(allCalls)
 
-  console.log(`✅ Single multicall completed! Got ${allResults.length} results`)
+  contractLogger.debug(`✅ Single multicall completed! Got ${allResults.length} results`)
 
   // Parse results back into the expected format
   const liquidityManagerResults = allResults.slice(liquidityManagerStartIndex, liquidityManagerStartIndex + (pairAddresses.length * 3))
@@ -226,7 +228,7 @@ export async function batchFarmingCalls(
     stakingResults.push(contractResults)
   })
 
-  console.log(`📊 Parsed results: ${liquidityManagerResults.length} LiquidityManager, ${stakingResults.length} staking contracts`)
+  contractLogger.debug(`📊 Parsed results: ${liquidityManagerResults.length} LiquidityManager, ${stakingResults.length} staking contracts`)
 
   return {
     liquidityManagerResults,

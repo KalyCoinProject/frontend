@@ -4,22 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { formatUnits, getContract } from 'viem';
 import { ERC20_ABI } from '@/config/abis';
-
-interface Token {
-  address: string;
-  decimals: number;
-  symbol: string;
-  isNative?: boolean;
-  // Enhanced with subgraph data
-  tradeVolumeUSD?: string;
-  totalLiquidity?: string;
-  derivedKLC?: string;
-  txCount?: string;
-  priceUSD?: string;
-}
+import { Token } from '@/config/dex/types';
+import { tokenLogger } from '@/lib/logger';
 
 interface TokenWithBalance extends Token {
-  balance: string;
   formattedBalance: string;
   balanceUSD?: string; // Calculated from balance * priceUSD
 }
@@ -79,15 +67,15 @@ export function useTokenBalance(token: Token | null) {
             setBalance(formatUnits(tokenBalance, token.decimals));
           } catch (contractError) {
             // Handle tokens that don't implement proper ERC20 interface (like bridge tokens)
-            console.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
+            tokenLogger.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
             setBalance('0');
           }
         }
       } catch (err) {
-        console.error('Error fetching token balance:', err);
+        tokenLogger.error('Error fetching token balance:', err);
         // Don't show error for timeouts, just keep previous balance
         if (err instanceof Error && err.message.includes('timeout')) {
-          console.warn('Balance fetch timed out, keeping previous balance');
+          tokenLogger.warn('Balance fetch timed out, keeping previous balance');
         } else {
           setError(err instanceof Error ? err.message : 'Failed to fetch balance');
           setBalance('0');
@@ -207,7 +195,7 @@ export function useTokenBalances(tokens: (Token | null)[]) {
                 };
               } catch (contractError) {
                 // Handle tokens that don't implement proper ERC20 interface (like bridge tokens)
-                console.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
+                tokenLogger.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
                 return {
                   symbol: token.symbol,
                   balance: '0'
@@ -217,7 +205,7 @@ export function useTokenBalances(tokens: (Token | null)[]) {
           } catch (err) {
             // Don't log timeout errors as they're expected with slow RPC
             if (!(err instanceof Error && err.message.includes('timeout'))) {
-              console.error(`Error fetching balance for ${token.symbol}:`, err);
+              tokenLogger.error(`Error fetching balance for ${token.symbol}:`, err);
             }
             return {
               symbol: token.symbol,
@@ -243,7 +231,7 @@ export function useTokenBalances(tokens: (Token | null)[]) {
           setIsInitialLoad(false);
         }
       } catch (err) {
-        console.error('Error fetching token balances:', err);
+        tokenLogger.error('Error fetching token balances:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch balances');
       } finally {
         // Only set loading to false if we were showing loading (initial load or forced refresh)

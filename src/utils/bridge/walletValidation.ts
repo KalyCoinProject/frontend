@@ -1,3 +1,4 @@
+import { CHAIN_IDS } from '@/config/chains';
 // Wallet Compatibility Validation for Bridge Operations
 // Validates wallet compatibility with specific chains and bridge operations
 
@@ -19,7 +20,7 @@ export interface ChainWalletConfig {
 // Chain-specific wallet configurations
 const CHAIN_WALLET_CONFIGS: Record<string, ChainWalletConfig> = {
   kalychain: {
-    chainId: 3888,
+    chainId: CHAIN_IDS.KALYCHAIN,
     chainName: 'KalyChain',
     supportedWallets: ['metamask', 'walletconnect', 'coinbase', 'internal'],
     requiredFeatures: ['eth_sendTransaction', 'eth_signTransaction'],

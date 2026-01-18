@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount, useConnect, useDisconnect, useBalance, useChainId, useSwitchChain, useSendTransaction } from 'wagmi'
 import { kalychain, isSupportedChain, type ChainId } from '@/config/chains'
+import { walletLogger } from '@/lib/logger'
 
 // Utility function to convert Hyperlane transaction to wagmi format
 function hyperlaneToWagmiTx(tx: any) {
-  console.log('🔍 Converting transaction:', tx);
+  walletLogger.debug('Converting transaction:', tx);
 
   // Handle different transaction structures
   const transaction = tx.transaction || tx;
 
   if (!transaction.to) {
-    console.error('❌ Transaction missing "to" field:', transaction);
+    walletLogger.error('Transaction missing "to" field:', transaction);
     throw new Error('No tx recipient address specified');
   }
 
@@ -34,7 +35,7 @@ function hyperlaneToWagmiTx(tx: any) {
     maxPriorityFeePerGas: transaction.maxPriorityFeePerGas ? convertToBigInt(transaction.maxPriorityFeePerGas) : undefined,
   };
 
-  console.log('✅ Converted transaction:', wagmiTx);
+  walletLogger.debug('Converted transaction:', wagmiTx);
   return wagmiTx;
 }
 
@@ -125,7 +126,7 @@ export function useWallet(): WalletState & WalletActions {
     // Log warning only once and not during render
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       setTimeout(() => {
-        console.warn('Wagmi provider not found, using internal wallet only')
+        walletLogger.warn('Wagmi provider not found, using internal wallet only')
       }, 0)
     }
   }
@@ -192,7 +193,7 @@ export function useWallet(): WalletState & WalletActions {
             })
           }
         }).catch(error => {
-          console.error('Error loading internal wallet state:', error)
+          walletLogger.error('Error loading internal wallet state:', error)
         })
       }
     } else if (isExternalConnected) {
@@ -203,7 +204,7 @@ export function useWallet(): WalletState & WalletActions {
       setInternalWallet(null)
     }
   }, [isInternalWalletConnected, isExternalConnected, wagmiIsConnected, wagmiConnector])
-  
+
   // Update wallet type when external wallet connects/disconnects
   useEffect(() => {
     if (isExternalConnected && externalAddress) {
@@ -215,7 +216,7 @@ export function useWallet(): WalletState & WalletActions {
       setWalletType(undefined)
     }
   }, [isExternalConnected, externalAddress, internalWallet])
-  
+
   // Connect function
   const connect = useCallback(async (type: WalletType) => {
     if (type === 'external') {
@@ -225,14 +226,14 @@ export function useWallet(): WalletState & WalletActions {
         await connectExternal({ connector })
       } else {
         if (process.env.NODE_ENV === 'development') {
-          console.warn('External wallet connection not available')
+          walletLogger.warn('External wallet connection not available')
         }
       }
     } else if (type === 'internal') {
       // Show internal wallet selection modal
       // This will be implemented when we integrate with existing internal wallet system
       if (process.env.NODE_ENV === 'development') {
-        console.log('Internal wallet connection - to be implemented')
+        walletLogger.debug('Internal wallet connection - to be implemented')
       }
     }
   }, [connectExternal, connectors])
@@ -367,7 +368,7 @@ export function useWallet(): WalletState & WalletActions {
       }
 
       try {
-        console.log('🔐 Signing transaction with external wallet:', {
+        walletLogger.debug('Signing transaction with external wallet:', {
           type: typeof transaction,
           keys: Object.keys(transaction || {}),
           transaction
@@ -376,14 +377,13 @@ export function useWallet(): WalletState & WalletActions {
         // Convert Hyperlane transaction to wagmi format
         const wagmiTx = hyperlaneToWagmiTx(transaction);
 
-        console.log('📝 Converted transaction:', wagmiTx);
+        walletLogger.debug('Converted transaction:', wagmiTx);
 
         // Send transaction using wagmi
-        console.log('📤 Sending transaction with wagmi...');
+        walletLogger.debug('Sending transaction with wagmi...');
         const result = await sendTransaction(wagmiTx);
 
-        console.log('📥 Transaction result:', result);
-        console.log('📥 Transaction result type:', typeof result);
+        walletLogger.debug('Transaction result:', result, 'type:', typeof result);
 
         if (!result) {
           throw new Error('Transaction hash not returned from wallet');
@@ -391,17 +391,17 @@ export function useWallet(): WalletState & WalletActions {
 
         // The result should be the transaction hash
         const hash = typeof result === 'string' ? result : result.hash || result;
-        console.log('✅ Final transaction hash:', hash);
+        walletLogger.debug('Final transaction hash:', hash);
 
         return hash;
       } catch (error) {
-        console.error('❌ External wallet transaction failed:', error);
+        walletLogger.error('External wallet transaction failed:', error);
         throw error;
       }
     } else if (walletType === 'internal') {
       // For internal wallets, use the internal wallet connector's sendTransaction method
       try {
-        console.log('🔐 Signing transaction with internal wallet:', {
+        walletLogger.debug('Signing transaction with internal wallet:', {
           type: typeof transaction,
           keys: Object.keys(transaction || {}),
           transaction
@@ -466,10 +466,10 @@ export function useWallet(): WalletState & WalletActions {
 
         const hash = result.data.sendContractTransaction.hash;
 
-        console.log('✅ Internal wallet transaction hash:', hash);
+        walletLogger.debug('Internal wallet transaction hash:', hash);
         return hash;
       } catch (error) {
-        console.error('❌ Internal wallet transaction failed:', error);
+        walletLogger.error('Internal wallet transaction failed:', error);
         throw error;
       }
     } else {

@@ -1,3 +1,4 @@
+import { stakingLogger } from '@/lib/logger';
 /**
  * Staking Data Hooks
  * 
@@ -18,7 +19,7 @@ function useContractReadSafe(config: any) {
   } catch (error) {
     // Wagmi provider not available or hydration mismatch, return fallback values
     if (process.env.NODE_ENV === 'development') {
-      console.warn('Contract read hook failed, using fallback values:', error)
+      stakingLogger.warn('Contract read hook failed, using fallback values:', error)
     }
     return {
       data: null,
@@ -94,7 +95,7 @@ export function useStakedBalance(address?: string) {
 
   // Debug logging
   if (address && process.env.NODE_ENV === 'development') {
-    console.log('🔍 useStakedBalance:', {
+    stakingLogger.debug('🔍 useStakedBalance:', {
       address,
       data: data?.toString(),
       isLoading,

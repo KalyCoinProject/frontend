@@ -6,6 +6,8 @@ import { parseUnits, formatUnits, getContract, encodeFunctionData } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { ROUTER_ABI, FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
 import { internalWalletUtils } from '@/connectors/internalWallet';
+import { DexService, Token as DexToken } from '@/services/dex';
+import { poolLogger } from '@/lib/logger';
 
 export enum ApprovalState {
   UNKNOWN = 'UNKNOWN',
@@ -165,7 +167,7 @@ export function usePools() {
     } else {
       if (!walletClient) throw new Error('Wallet client not available');
 
-      console.log('📝 Executing external wallet contract call:', {
+      poolLogger.debug('Executing external wallet contract call:', {
         address: contractAddress,
         functionName,
         args,
@@ -182,10 +184,10 @@ export function usePools() {
           value,
         });
 
-        console.log('✅ Contract call successful:', result);
+        poolLogger.debug('Contract call successful:', result);
         return result;
       } catch (err) {
-        console.error('❌ Contract call failed:', err);
+        poolLogger.error('Contract call failed:', err);
         throw err;
       }
     }
@@ -207,16 +209,12 @@ export function usePools() {
     }
 
     try {
-      console.log(`📝 Starting approval process...`);
-      console.log(`📝 Token: ${tokenAddress}`);
-      console.log(`📝 Spender: ${spenderAddress}`);
-      console.log(`📝 User address: ${address}`);
-      console.log(`📝 Wallet client available: ${!!walletClient}`);
+      poolLogger.debug('Starting approval process...', { tokenAddress, spenderAddress, userAddress: address });
 
       // Use MaxUint256 for approval like the old UI
       const maxAmount = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
-      console.log(`📝 Calling executeContractCall...`);
+      poolLogger.debug('Calling executeContractCall...');
       const approveHash = await executeContractCall(
         tokenAddress,
         'approve',
@@ -225,12 +223,11 @@ export function usePools() {
         ERC20_ABI
       );
 
-      console.log(`📝 Approval hash: ${approveHash}`);
-      console.log(`📝 Waiting for transaction receipt...`);
+      poolLogger.debug('Approval hash:', approveHash);
       await publicClient?.waitForTransactionReceipt({ hash: approveHash });
-      console.log('✅ Token approved successfully');
+      poolLogger.debug('Token approved successfully');
     } catch (err) {
-      console.error('❌ Error approving token:', err);
+      poolLogger.error('Error approving token:', err);
       throw err;
     }
   }, [executeContractCall, publicClient, address, walletClient]);
@@ -238,7 +235,7 @@ export function usePools() {
   // New function to get pair info from subgraph
   const getPairInfoFromSubgraph = useCallback(async (tokenA: string, tokenB: string): Promise<PairInfo | null> => {
     try {
-      console.log('🔍 Fetching pair info from subgraph for:', tokenA, tokenB);
+      poolLogger.debug('Fetching pair info from subgraph for:', tokenA, tokenB);
 
       const response = await fetch('/api/graphql', {
         method: 'POST',
@@ -285,10 +282,10 @@ export function usePools() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 Subgraph pair response:', result);
+        poolLogger.debug('Subgraph pair response:', result);
 
         if (result.errors) {
-          console.error('GraphQL errors:', result.errors);
+          poolLogger.error('GraphQL errors:', result.errors);
           throw new Error(result.errors[0].message);
         }
 
@@ -323,11 +320,11 @@ export function usePools() {
           };
         }
       } else {
-        console.warn('Failed to fetch pair from subgraph, falling back to contract call');
+        poolLogger.warn('Failed to fetch pair from subgraph, falling back to contract call');
         return null; // Will trigger fallback to contract call
       }
     } catch (err) {
-      console.error('❌ Error fetching pair from subgraph:', err);
+      poolLogger.error('Error fetching pair from subgraph:', err);
       return null; // Will trigger fallback to contract call
     }
   }, []);
@@ -336,12 +333,12 @@ export function usePools() {
     // First try to get pair info from subgraph (faster and more data)
     const subgraphResult = await getPairInfoFromSubgraph(tokenA, tokenB);
     if (subgraphResult !== null) {
-      console.log('✅ Using subgraph data for pair:', tokenA, tokenB);
+      poolLogger.debug('Using subgraph data for pair:', tokenA, tokenB);
       return subgraphResult;
     }
 
     // Fallback to contract calls if subgraph fails
-    console.log('⚠️ Falling back to contract calls for pair:', tokenA, tokenB);
+    poolLogger.warn('Falling back to contract calls for pair:', tokenA, tokenB);
     if (!publicClient) return null;
 
     try {
@@ -407,7 +404,7 @@ export function usePools() {
         token0Decimals = decimalsResults[0] as number;
         token1Decimals = decimalsResults[1] as number;
       } catch (err) {
-        console.warn('Could not fetch token decimals, using 18 as default');
+        poolLogger.warn('Could not fetch token decimals, using 18 as default');
       }
 
       const reservesArray = reserves as [bigint, bigint, number];
@@ -421,7 +418,7 @@ export function usePools() {
         exists: true
       };
     } catch (err) {
-      console.error('Error fetching pair info:', err);
+      poolLogger.error('Error fetching pair info:', err);
       return null;
     }
   }, [publicClient, getPairInfoFromSubgraph]);
@@ -475,7 +472,7 @@ export function usePools() {
 
       return { amountA, amountB };
     } catch (err) {
-      console.error('Error calculating optimal amounts:', err);
+      poolLogger.error('Error calculating optimal amounts:', err);
       return null;
     }
   }, [getPairInfo]);
@@ -516,7 +513,7 @@ export function usePools() {
       // Calculate deadline (current time + 20 minutes)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + (20 * 60));
 
-      console.log('🚀 Adding liquidity:', {
+      poolLogger.debug('Adding liquidity:', {
         tokenA,
         tokenB,
         amountA,
@@ -538,7 +535,7 @@ export function usePools() {
         const klcAmountMin = isTokenANative ? amountAMin : amountBMin;
 
         // Note: Token approval should be handled by the UI before calling this function
-        console.log('🔄 Adding KLC + Token liquidity...');
+        poolLogger.debug('Adding KLC + Token liquidity...');
         const liquidityHash = await executeContractCall(
           routerAddress,
           'addLiquidityKLC',
@@ -546,27 +543,27 @@ export function usePools() {
           klcAmount
         );
 
-        console.log(`🔄 Add liquidity hash: ${liquidityHash}`);
+        poolLogger.debug('Add liquidity hash:', liquidityHash);
         await publicClient.waitForTransactionReceipt({ hash: liquidityHash });
-        console.log('✅ Liquidity added successfully');
+        poolLogger.debug('Liquidity added successfully');
       } else {
         // Handle Token + Token liquidity
         // Note: Approvals should be handled by the UI before calling this function
-        console.log('🔄 Adding Token + Token liquidity...');
+        poolLogger.debug('Adding Token + Token liquidity...');
         const liquidityHash = await executeContractCall(
           routerAddress,
           'addLiquidity',
           [tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address, deadline]
         );
 
-        console.log(`🔄 Add liquidity hash: ${liquidityHash}`);
+        poolLogger.debug('Add liquidity hash:', liquidityHash);
         await publicClient.waitForTransactionReceipt({ hash: liquidityHash });
-        console.log('✅ Liquidity added successfully');
+        poolLogger.debug('Liquidity added successfully');
       }
 
       return true;
     } catch (err) {
-      console.error('❌ Error adding liquidity:', err);
+      poolLogger.error('Error adding liquidity:', err);
       setError(`Failed to add liquidity: ${err instanceof Error ? err.message : 'Unknown error'}`);
       return false;
     } finally {
@@ -596,7 +593,7 @@ export function usePools() {
     try {
       const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
 
-      console.log('🚀 Creating pair and adding liquidity:', {
+      poolLogger.debug('Creating pair and adding liquidity:', {
         tokenA,
         tokenB,
         amountA,
@@ -606,12 +603,12 @@ export function usePools() {
       // Step 1: Check if pair already exists
       const existingPair = await getPairInfo(tokenA, tokenB);
       if (existingPair && existingPair.exists) {
-        console.log('⚠️ Pair already exists, adding liquidity to existing pair');
+        poolLogger.warn('Pair already exists, adding liquidity to existing pair');
         return await addLiquidityRef.current(tokenA, tokenB, amountA, amountB, tokenADecimals, tokenBDecimals);
       }
 
       // Step 2: Create the pair
-      console.log('🏭 Creating new pair...');
+      poolLogger.debug('Creating new pair...');
       const createPairHash = await executeContractCall(
         factoryAddress,
         'createPair',
@@ -620,21 +617,21 @@ export function usePools() {
         FACTORY_ABI
       );
 
-      console.log(`🏭 Create pair hash: ${createPairHash}`);
+      poolLogger.debug('Create pair hash:', createPairHash);
       await publicClient.waitForTransactionReceipt({ hash: createPairHash });
-      console.log('✅ Pair created successfully');
+      poolLogger.debug('Pair created successfully');
 
       // Step 3: Add initial liquidity to the new pair
-      console.log('💧 Adding initial liquidity to new pair...');
+      poolLogger.debug('Adding initial liquidity to new pair...');
       const liquidityResult = await addLiquidityRef.current(tokenA, tokenB, amountA, amountB, tokenADecimals, tokenBDecimals);
 
       if (liquidityResult) {
-        console.log('🎉 Pair created and liquidity added successfully!');
+        poolLogger.debug('Pair created and liquidity added successfully!');
       }
 
       return liquidityResult;
     } catch (err) {
-      console.error('❌ Error creating pair:', err);
+      poolLogger.error('Error creating pair:', err);
       setError(`Failed to create pair: ${err instanceof Error ? err.message : 'Unknown error'}`);
       return false;
     } finally {
@@ -663,7 +660,7 @@ export function usePools() {
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
       const wklcAddress = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
 
-      console.log('🔥 Removing liquidity:', {
+      poolLogger.debug('Removing liquidity:', {
         tokenA,
         tokenB,
         liquidity,
@@ -690,7 +687,7 @@ export function usePools() {
       }
 
       // Step 1: Approve LP tokens for router
-      console.log('📝 Approving LP tokens for router...');
+      poolLogger.debug('Approving LP tokens for router...');
       const approveHash = await executeContractCall(
         pairAddress as string,
         'approve',
@@ -699,9 +696,9 @@ export function usePools() {
         ERC20_ABI
       );
 
-      console.log(`📝 LP token approval hash: ${approveHash}`);
+      poolLogger.debug('LP token approval hash:', approveHash);
       await publicClient.waitForTransactionReceipt({ hash: approveHash });
-      console.log('✅ LP tokens approved');
+      poolLogger.debug('LP tokens approved');
 
       // Step 2: Remove liquidity
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200); // 20 minutes from now
@@ -713,33 +710,33 @@ export function usePools() {
         const tokenAmountMin = tokenA === wklcAddress ? amountBMinBN : amountAMinBN;
         const klcAmountMin = tokenA === wklcAddress ? amountAMinBN : amountBMinBN;
 
-        console.log('🔄 Removing KLC + Token liquidity...');
+        poolLogger.debug('Removing KLC + Token liquidity...');
         const removeLiquidityHash = await executeContractCall(
           routerAddress,
           'removeLiquidityKLC',
           [token, liquidityAmount, tokenAmountMin, klcAmountMin, address, deadline]
         );
 
-        console.log(`🔄 Remove liquidity hash: ${removeLiquidityHash}`);
+        poolLogger.debug('Remove liquidity hash:', removeLiquidityHash);
         await publicClient.waitForTransactionReceipt({ hash: removeLiquidityHash });
-        console.log('✅ KLC liquidity removed successfully');
+        poolLogger.debug('KLC liquidity removed successfully');
       } else {
         // Handle Token + Token pairs (removeLiquidity)
-        console.log('🔄 Removing Token + Token liquidity...');
+        poolLogger.debug('Removing Token + Token liquidity...');
         const removeLiquidityHash = await executeContractCall(
           routerAddress,
           'removeLiquidity',
           [tokenA, tokenB, liquidityAmount, amountAMinBN, amountBMinBN, address, deadline]
         );
 
-        console.log(`🔄 Remove liquidity hash: ${removeLiquidityHash}`);
+        poolLogger.debug('Remove liquidity hash:', removeLiquidityHash);
         await publicClient.waitForTransactionReceipt({ hash: removeLiquidityHash });
-        console.log('✅ Token liquidity removed successfully');
+        poolLogger.debug('Token liquidity removed successfully');
       }
 
       return true;
     } catch (err) {
-      console.error('❌ Error removing liquidity:', err);
+      poolLogger.error('Error removing liquidity:', err);
       setError(`Failed to remove liquidity: ${err instanceof Error ? err.message : 'Unknown error'}`);
       return false;
     } finally {
@@ -793,7 +790,7 @@ export function usePools() {
       
       return [];
     } catch (err) {
-      console.error('Error fetching user pools:', err);
+      poolLogger.error('Error fetching user pools:', err);
       return [];
     }
   }, []);
@@ -801,7 +798,7 @@ export function usePools() {
   // Get all pairs from subgraph for browsing
   const getAllPairs = useCallback(async (first: number = 25, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {
     try {
-      console.log('🔍 Fetching all pairs from subgraph...');
+      poolLogger.debug('Fetching all pairs from subgraph...');
 
       const response = await fetch('/api/graphql', {
         method: 'POST',
@@ -853,20 +850,20 @@ export function usePools() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 All pairs response:', result);
+        poolLogger.debug('All pairs response:', result);
 
         if (result.errors) {
-          console.error('GraphQL errors:', result.errors);
+          poolLogger.error('GraphQL errors:', result.errors);
           throw new Error(result.errors[0].message);
         }
 
         return result.data?.pairs || [];
       } else {
-        console.warn('Failed to fetch pairs from subgraph');
+        poolLogger.warn('Failed to fetch pairs from subgraph');
         return [];
       }
     } catch (err) {
-      console.error('❌ Error fetching pairs from subgraph:', err);
+      poolLogger.error('Error fetching pairs from subgraph:', err);
       return [];
     }
   }, []);

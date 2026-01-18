@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { graphqlRequest, isDevelopment } from '@/lib/api-config';
+import { farmingLogger } from '@/lib/logger';
 
 // Types for farming subgraph data
 export interface FarmingPool {
@@ -50,13 +51,13 @@ export function useFarmingSubgraph(userAddress?: string) {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching farming data from backend GraphQL...');
+      farmingLogger.debug('Fetching farming data from backend GraphQL...');
 
       // Use backend API URL from environment variables with fallback
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
       const graphqlEndpoint = `${apiUrl}/graphql`;
 
-      console.log('📡 GraphQL Endpoint:', graphqlEndpoint);
+      farmingLogger.debug('GraphQL Endpoint:', graphqlEndpoint);
 
       const response = await fetch(graphqlEndpoint, {
         method: 'POST',
@@ -115,10 +116,10 @@ export function useFarmingSubgraph(userAddress?: string) {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 Farming subgraph response:', result);
+        farmingLogger.debug('Farming subgraph response:', result);
 
         if (result.errors) {
-          console.error('GraphQL errors:', result.errors);
+          farmingLogger.error('GraphQL errors:', result.errors);
           throw new Error(result.errors[0].message);
         }
 
@@ -131,15 +132,15 @@ export function useFarmingSubgraph(userAddress?: string) {
             userFarms: userFarms || []
           });
 
-          console.log(`✅ Fetched ${farmingPools?.length || 0} farming pools, ${whitelistedPools?.length || 0} whitelisted pools, ${userFarms?.length || 0} user farms`);
+          farmingLogger.debug(`Fetched ${farmingPools?.length || 0} farming pools, ${whitelistedPools?.length || 0} whitelisted pools, ${userFarms?.length || 0} user farms`);
         }
       } else {
         const errorText = await response.text();
-        console.error('❌ Backend GraphQL response not ok:', response.status, errorText);
+        farmingLogger.error('Backend GraphQL response not ok:', response.status, errorText);
         throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
-      console.error('❌ Error fetching farming data:', err);
+      farmingLogger.error('Error fetching farming data:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch farming data';
       setError(`Farming data fetch failed: ${errorMessage}`);
     } finally {
@@ -261,7 +262,7 @@ export function useFarmingPool(poolAddress: string, userAddress?: string) {
         throw new Error('Failed to fetch farming pool data');
       }
     } catch (err) {
-      console.error('❌ Error fetching farming pool:', err);
+      farmingLogger.error('❌ Error fetching farming pool:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch farming pool');
     } finally {
       setIsLoading(false);
