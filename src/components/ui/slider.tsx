@@ -9,13 +9,13 @@ interface SliderProps {
   className?: string;
 }
 
-export function Slider({ 
-  value, 
-  onChange, 
-  min = 0, 
-  max = 100, 
-  step = 1, 
-  className = '' 
+export function Slider({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  className = ''
 }: SliderProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(parseInt(e.target.value));
@@ -30,9 +30,9 @@ export function Slider({
         step={step}
         value={value}
         onChange={handleChange}
-        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
         style={{
-          background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${value}%, #e5e7eb ${value}%, #e5e7eb 100%)`
+          background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${value}%, #374151 ${value}%, #374151 100%)`
         }}
       />
       <style jsx>{`
@@ -41,20 +41,30 @@ export function Slider({
           height: 20px;
           width: 20px;
           border-radius: 50%;
-          background: #3b82f6;
+          background: #f59e0b;
           cursor: pointer;
           border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+          transition: all 0.2s ease;
+        }
+        .slider::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
+          box-shadow: 0 0 15px rgba(245, 158, 11, 0.7);
         }
         
         .slider::-moz-range-thumb {
           height: 20px;
           width: 20px;
           border-radius: 50%;
-          background: #3b82f6;
+          background: #f59e0b;
           cursor: pointer;
           border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+          transition: all 0.2s ease;
+        }
+        .slider::-moz-range-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.7);
         }
       `}</style>
     </div>

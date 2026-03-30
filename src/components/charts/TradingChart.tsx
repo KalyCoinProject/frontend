@@ -43,6 +43,7 @@ interface ChartProps {
   height?: number;
   showChartTypes?: boolean;
   className?: string;
+  protocolVersion?: 'v2' | 'v3';
 }
 
 
@@ -64,6 +65,7 @@ export default function TradingChart({
   height = 400,
   showChartTypes = true,
   className = '',
+  protocolVersion = 'v2',
 }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -113,6 +115,7 @@ export default function TradingChart({
     tokenB: hasValidTokens ? currentTokenB : null,
     enabled: hasValidTokens,
     refetchInterval: 30000, // 30 seconds
+    protocolVersion,
   });
 
   // Get real-time pair-specific market stats for accurate 24hr volume
@@ -575,12 +578,12 @@ export default function TradingChart({
               {isLiquidityError
                 ? `No liquidity pool exists for ${currentTokenA?.symbol}/${currentTokenB?.symbol}. This pair is not available for trading.`
                 : isCoinGeckoError
-                ? `Chart data not available from CoinGecko. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may not be supported or have sufficient trading data.`
-                : isAuthError
-                ? `Subgraph authorization error. The ${getChainName(currentTokenA?.chainId || currentTokenB?.chainId)} subgraph requires API authentication.`
-                : isSubgraphError
-                ? `Pair not indexed in subgraph yet. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may be new or not available on this DEX.`
-                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available. Error: ${dataError || 'Unknown error'}`
+                  ? `Chart data not available from CoinGecko. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may not be supported or have sufficient trading data.`
+                  : isAuthError
+                    ? `Subgraph authorization error. The ${getChainName(currentTokenA?.chainId || currentTokenB?.chainId)} subgraph requires API authentication.`
+                    : isSubgraphError
+                      ? `Pair not indexed in subgraph yet. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may be new or not available on this DEX.`
+                      : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available. Error: ${dataError || 'Unknown error'}`
               }
             </p>
           </div>
@@ -605,11 +608,10 @@ export default function TradingChart({
                 </span>
                 {priceChange24h !== null && (
                   <span
-                    className={`text-sm font-medium px-2 py-1 rounded ${
-                      priceChange24h >= 0
+                    className={`text-sm font-medium px-2 py-1 rounded ${priceChange24h >= 0
                         ? 'text-green-700 bg-green-100'
                         : 'text-red-700 bg-red-100'
-                    }`}
+                      }`}
                   >
                     {formatPriceChange(priceChange24h)}
                   </span>

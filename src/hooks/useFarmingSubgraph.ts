@@ -140,8 +140,13 @@ export function useFarmingSubgraph(userAddress?: string) {
         throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
-      farmingLogger.error('Error fetching farming data:', err);
+      // Downgrade network errors to warn — backend may simply not be running
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch farming data';
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('ECONNREFUSED')) {
+        farmingLogger.warn('[Farming] Backend unavailable, V2 farming data skipped');
+      } else {
+        farmingLogger.error('Error fetching farming data:', err);
+      }
       setError(`Farming data fetch failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
@@ -262,8 +267,13 @@ export function useFarmingPool(poolAddress: string, userAddress?: string) {
         throw new Error('Failed to fetch farming pool data');
       }
     } catch (err) {
-      farmingLogger.error('❌ Error fetching farming pool:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch farming pool');
+      const errMsg = err instanceof Error ? err.message : 'Failed to fetch farming pool';
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+        farmingLogger.warn('[Farming] Backend unavailable, pool data skipped');
+      } else {
+        farmingLogger.error('❌ Error fetching farming pool:', err);
+      }
+      setError(errMsg);
     } finally {
       setIsLoading(false);
     }

@@ -45,7 +45,7 @@ interface ApprovalInfo {
 export function usePools() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [approvalStates, setApprovalStates] = useState<{[key: string]: ApprovalState}>({});
+  const [approvalStates, setApprovalStates] = useState<{ [key: string]: ApprovalState }>({});
 
   // Wagmi hooks for wallet interaction
   const { address, isConnected, connector } = useAccount();
@@ -431,7 +431,7 @@ export function usePools() {
   ): Promise<OptimalAmounts | null> => {
     try {
       const pairInfo = await getPairInfo(tokenA, tokenB);
-      
+
       if (!pairInfo || !pairInfo.exists) {
         // For new pools, user can set any ratio
         return null;
@@ -449,7 +449,7 @@ export function usePools() {
 
       // Determine which token is token0 and token1
       const isTokenAFirst = tokenA.toLowerCase() === pairInfo.token0.toLowerCase();
-      
+
       if (inputToken === 'A') {
         amountA = amount;
         if (isTokenAFirst) {
@@ -785,15 +785,117 @@ export function usePools() {
 
       if (response.ok) {
         const data = await response.json();
-        return data.data?.liquidityPositions || [];
+        const positions = data.data?.liquidityPositions || [];
+
+        // If we found positions from subgraph, return them
+        if (positions.length > 0) {
+          poolLogger.debug('Found user positions from subgraph:', positions);
+          return positions;
+        }
       }
-      
-      return [];
+
+      // FALLBACK: If subgraph returns empty (common on testnet), check common pairs manually
+      // This is less efficient but necessary for testnet functionality
+      poolLogger.info('Subgraph returned no positions, conducting manual fallback discovery...');
+
+      // Import KALYCHAIN_TOKENS dynamically to avoid circular dependencies if any
+      const { KALYCHAIN_TOKENS } = await import('@/config/dex/tokens/kalychain');
+
+      poolLogger.info(`Fallback discovery loaded ${KALYCHAIN_TOKENS.length} tokens.`);
+
+      const discoveredPositions = [];
+      const checkedPairs = new Set<string>();
+
+      // Base tokens to check against.
+      // We explicitly look for these common tokens AND any specific testnet tokens we just found.
+      const baseTokens = KALYCHAIN_TOKENS.filter(t =>
+        ['KLC', 'wKLC', 'USDT', 'USDC', 'KSWAP', 'tKLS', 'BUSD'].includes(t.symbol)
+      );
+
+      poolLogger.debug('Fallback checking against base tokens:', baseTokens.map(t => t.symbol));
+
+      // Check pairs between Base Tokens and All Other Tokens
+      // Optimized to avoid duplicates (A-B and B-A)
+      for (const baseToken of baseTokens) {
+        for (const token of KALYCHAIN_TOKENS) {
+          if (baseToken.address === token.address) continue; // Skip self
+
+          // Create a canonical key to avoid checking A-B and B-A twice
+          const [t0, t1] = baseToken.address.toLowerCase() < token.address.toLowerCase()
+            ? [baseToken.address, token.address]
+            : [token.address, baseToken.address];
+
+          const pairKey = `${t0}-${t1}`;
+          if (checkedPairs.has(pairKey)) continue;
+          checkedPairs.add(pairKey);
+
+          try {
+            // 1. Get Pair Info (this will call Factory check -> Contract check)
+            const pairInfo = await getPairInfo(baseToken.address, token.address);
+
+            if (pairInfo) {
+              poolLogger.debug(`Checked ${baseToken.symbol}-${token.symbol}: ${pairInfo.exists ? 'EXISTS' : 'NO_EXIST'} at ${pairInfo.address}`);
+            }
+
+            if (pairInfo && pairInfo.exists) {
+              // 2. Check User's Balance in this pair
+              const pairContract = getContract({
+                address: pairInfo.address as `0x${string}`,
+                abi: ERC20_ABI,
+                client: publicClient!
+              });
+
+              const balance = await pairContract.read.balanceOf([userAddress as `0x${string}`]) as bigint;
+
+              if (balance > 0n) {
+                poolLogger.info(`Found position: ${baseToken.symbol}/${token.symbol} Balance: ${formatUnits(balance, 18)}`);
+                poolLogger.debug(`Found hidden position: ${baseToken.symbol}/${token.symbol} (${formatUnits(balance, 18)} LP)`);
+
+                // Construct a fake object matching the subgraph structure
+                discoveredPositions.push({
+                  id: `${pairInfo.address}-${userAddress}`, // Unique ID convention
+                  liquidityTokenBalance: formatUnits(balance, 18),
+                  pair: {
+                    id: pairInfo.address,
+                    token0: {
+                      id: pairInfo.token0, // Kept for consistency if needed
+                      address: pairInfo.token0, // REQUIRED for Service usage
+                      symbol: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
+                      name: 'Unknown',
+                      decimals: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
+                      chainId: DEFAULT_CHAIN_ID,
+                      logoURI: '',
+                    },
+                    token1: {
+                      id: pairInfo.token1,
+                      address: pairInfo.token1, // REQUIRED for Service usage
+                      symbol: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
+                      name: 'Unknown',
+                      decimals: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
+                      chainId: DEFAULT_CHAIN_ID,
+                      logoURI: '',
+                    },
+                    reserve0: pairInfo.reserve0,
+                    reserve1: pairInfo.reserve1,
+                    totalSupply: pairInfo.totalSupply
+                  }
+                });
+              }
+            }
+          } catch (err) {
+            // Continue searching regardless of error on one pair
+            poolLogger.debug(`Manual check failed for ${baseToken.symbol}/${token.symbol}`, err);
+          }
+        }
+      }
+
+      return discoveredPositions;
+
     } catch (err) {
       poolLogger.error('Error fetching user pools:', err);
       return [];
     }
-  }, []);
+  }, [publicClient, getPairInfo]);
 
   // Get all pairs from subgraph for browsing
   const getAllPairs = useCallback(async (first: number = 25, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {

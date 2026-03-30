@@ -25,10 +25,13 @@ import { getDefaultTokenPair, isChainSupported } from '@/config/dex';
 // Custom hooks
 import { useMultichainTokenBalance } from '@/hooks/useMultichainTokenBalance';
 import { useTokenLists } from '@/hooks/useTokenLists';
-import { useDexSwap } from '@/hooks/useDexSwap';
+import { useSwap } from '@/hooks/useSwap';
 
 // Price impact utilities
 import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
+
+// V2/V3 Protocol Toggle
+import ProtocolVersionToggle from './ProtocolVersionToggle';
 
 // TokenIcon component with gradient fallback
 function TokenIcon({ token }: { token: Token }) {
@@ -69,10 +72,10 @@ interface SwapState {
   deadline: string;
 }
 
-export default function MultichainSwapInterface({ 
-  fromToken: propFromToken, 
-  toToken: propToToken, 
-  onTokenChange 
+export default function MultichainSwapInterface({
+  fromToken: propFromToken,
+  toToken: propToToken,
+  onTokenChange
 }: MultichainSwapInterfaceProps = {}) {
   // Wagmi hooks for wallet interaction
   const { address, isConnected } = useAccount();
@@ -118,7 +121,7 @@ export default function MultichainSwapInterface({
     if (chainId === 56) {
       // BSC: Prefer BUSD, fallback to USDT
       stablecoin = supportedTokens.find(token => token.symbol === 'BUSD') ||
-                   supportedTokens.find(token => token.symbol === 'USDT');
+        supportedTokens.find(token => token.symbol === 'USDT');
     } else {
       // Other chains: Prefer USDT
       stablecoin = supportedTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
@@ -200,8 +203,8 @@ export default function MultichainSwapInterface({
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
 
-  // DEX swap hook with proper client injection
-  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, isInternalWallet } = useDexSwap(chainId || CHAIN_IDS.KALYCHAIN);
+  // Unified swap hook — routes to V2 or V3 based on protocol version toggle
+  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, protocolVersion, isV3, isV3Supported } = useSwap(chainId || CHAIN_IDS.KALYCHAIN);
 
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -253,6 +256,7 @@ export default function MultichainSwapInterface({
     if (!chainId || !isChainSupported(chainId)) return '';
     switch (chainId) {
       case CHAIN_IDS.KALYCHAIN: return 'KalySwap';
+      case CHAIN_IDS.KALYCHAIN_TESTNET: return 'KalySwap Testnet';
       case 56: return 'PancakeSwap';
       case 42161: return 'Camelot';
       default: return '';
@@ -315,7 +319,7 @@ export default function MultichainSwapInterface({
     // Debounce quote requests
     const timeoutId = setTimeout(getQuote, 500);
     return () => clearTimeout(timeoutId);
-  }, [chainId, swapState.fromToken, swapState.toToken, swapState.fromAmount]);
+  }, [chainId, swapState.fromToken, swapState.toToken, swapState.fromAmount, protocolVersion]);
 
   // Helper function to check if tokens are valid for current chain
   const areTokensValidForChain = (fromToken: Token | null, toToken: Token | null): boolean => {
@@ -434,7 +438,7 @@ export default function MultichainSwapInterface({
         fromAmountFormatted: swapState.fromAmount,
         toAmountFormatted: quote.amountOut,
         slippage: swapState.slippage,
-        priceImpact: quote.priceImpact.toString(),
+        priceImpact: (quote.priceImpact || 0).toString(),
         userAddress: address,
         status: 'pending'
       });
@@ -518,343 +522,347 @@ export default function MultichainSwapInterface({
   return (
     <>
       <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-white">
-            Swap {dexName && `on ${dexName}`}
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-            className="text-gray-400 hover:text-white"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Chain indicator */}
-        {chainId && (
-          <div className="text-xs text-gray-400">
-            Chain: {chainId} {!isChainSupportedForSwap && '(Unsupported)'}
-          </div>
-        )}
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Token Loading State */}
-        {tokensLoading && (
-          <div className="p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-400 text-sm">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <span>Loading tokens...</span>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white">
+              Swap {dexName && `on ${dexName}`}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <ProtocolVersionToggle size="sm" showLabel={false} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSettings(!showSettings)}
+                className="text-gray-400 hover:text-white"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        )}
 
-        {/* Token Loading Error */}
-        {tokensError && (
-          <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-lg">
-            <div className="flex items-center gap-2 text-red-400 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Failed to load tokens: {tokensError}</span>
+          {/* Chain indicator */}
+          {chainId && (
+            <div className="text-xs text-gray-400">
+              Chain: {chainId} {!isChainSupportedForSwap && '(Unsupported)'}
+              {isV3 && isV3Supported && <span className="ml-2 text-purple-400">Concentrated Liquidity</span>}
             </div>
-          </div>
-        )}
+          )}
+        </CardHeader>
 
-        {/* Error Display */}
-        {hasError && error && (
-          <ErrorDisplay
-            error={error}
-            onRetry={retry}
-            onReset={clearError}
-            isRetrying={isRetrying}
-          />
-        )}
-
-        {/* Chain not supported warning */}
-        {!isChainSupportedForSwap && (
-          <div className="p-3 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
-            <div className="flex items-center gap-2 text-yellow-400 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Chain not supported for swapping</span>
-            </div>
-            <div className="text-xs text-yellow-300 mt-1">
-              Please switch to KalyChain, BSC, or Arbitrum
-            </div>
-          </div>
-        )}
-
-        {/* From Token */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-300">From</Label>
-          <div className="relative">
-            <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
-              <div className="flex items-center gap-3 flex-1">
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => setShowFromTokenSelector(true)}
-                  disabled={!isChainSupportedForSwap}
-                >
-                  {swapState.fromToken ? (
-                    <>
-                      <TokenIcon token={swapState.fromToken} />
-                      <span className="font-medium">{swapState.fromToken.symbol}</span>
-                    </>
-                  ) : (
-                    <span className="text-gray-400">Select token</span>
-                  )}
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex flex-col items-end flex-1">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  value={swapState.fromAmount}
-                  onChange={(e) => {
-                    // Only allow numbers and decimal point
-                    const value = e.target.value.replace(/[^0-9.]/g, '');
-                    handleFromAmountChange(value);
-                  }}
-                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full"
-                  disabled={!isChainSupportedForSwap}
-                />
-                {swapState.fromToken && (
-                  <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                    <span>Balance: {getTokenBalance(swapState.fromToken)}</span>
-                  </div>
-                )}
+        <CardContent className="space-y-4">
+          {/* Token Loading State */}
+          {tokensLoading && (
+            <div className="p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-400 text-sm">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                <span>Loading tokens...</span>
               </div>
             </div>
-            {/* Percentage buttons */}
-            {swapState.fromToken && (
-              <div className="flex gap-1 mt-2">
-                {[25, 50, 75].map((percentage) => (
+          )}
+
+          {/* Token Loading Error */}
+          {tokensError && (
+            <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-red-400 text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Failed to load tokens: {tokensError}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {hasError && error && (
+            <ErrorDisplay
+              error={error}
+              onRetry={retry}
+              onReset={clearError}
+              isRetrying={isRetrying}
+            />
+          )}
+
+          {/* Chain not supported warning */}
+          {!isChainSupportedForSwap && (
+            <div className="p-3 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Chain not supported for swapping</span>
+              </div>
+              <div className="text-xs text-yellow-300 mt-1">
+                Please switch to KalyChain, BSC, or Arbitrum
+              </div>
+            </div>
+          )}
+
+          {/* From Token */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-300">From</Label>
+            <div className="relative">
+              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
+                <div className="flex items-center gap-3 flex-1">
                   <Button
-                    key={percentage}
+                    variant="ghost"
+                    className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
+                    onClick={() => setShowFromTokenSelector(true)}
+                    disabled={!isChainSupportedForSwap}
+                  >
+                    {swapState.fromToken ? (
+                      <>
+                        <TokenIcon token={swapState.fromToken} />
+                        <span className="font-medium">{swapState.fromToken.symbol}</span>
+                      </>
+                    ) : (
+                      <span className="text-gray-400">Select token</span>
+                    )}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-col items-end flex-1">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.0"
+                    value={swapState.fromAmount}
+                    onChange={(e) => {
+                      // Only allow numbers and decimal point
+                      const value = e.target.value.replace(/[^0-9.]/g, '');
+                      handleFromAmountChange(value);
+                    }}
+                    className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full"
+                    disabled={!isChainSupportedForSwap}
+                  />
+                  {swapState.fromToken && (
+                    <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                      <span>Balance: {getTokenBalance(swapState.fromToken)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Percentage buttons */}
+              {swapState.fromToken && (
+                <div className="flex gap-1 mt-2">
+                  {[25, 50, 75].map((percentage) => (
+                    <Button
+                      key={percentage}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const balance = getTokenBalance(swapState.fromToken!);
+                        const numBalance = parseFloat(balance);
+                        if (!isNaN(numBalance)) {
+                          const amount = (numBalance * percentage / 100).toString();
+                          handleFromAmountChange(amount);
+                        }
+                      }}
+                      className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300"
+                      disabled={!isChainSupportedForSwap}
+                    >
+                      {percentage}%
+                    </Button>
+                  ))}
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       const balance = getTokenBalance(swapState.fromToken!);
-                      const numBalance = parseFloat(balance);
-                      if (!isNaN(numBalance)) {
-                        const amount = (numBalance * percentage / 100).toString();
-                        handleFromAmountChange(amount);
-                      }
+                      handleFromAmountChange(balance);
                     }}
-                    className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300"
+                    className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300 font-semibold"
                     disabled={!isChainSupportedForSwap}
                   >
-                    {percentage}%
+                    MAX
                   </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const balance = getTokenBalance(swapState.fromToken!);
-                    handleFromAmountChange(balance);
-                  }}
-                  className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300 font-semibold"
-                  disabled={!isChainSupportedForSwap}
-                >
-                  MAX
-                </Button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Swap Direction Button */}
-        <div className="flex justify-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleSwapTokens}
-            className="rounded-full p-2 bg-stone-800 hover:bg-stone-700 border border-stone-600"
-            disabled={!isChainSupportedForSwap}
-          >
-            <ArrowUpDown className="h-4 w-4 text-white" />
-          </Button>
-        </div>
+          {/* Swap Direction Button */}
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSwapTokens}
+              className="rounded-full p-2 bg-stone-800 hover:bg-stone-700 border border-stone-600"
+              disabled={!isChainSupportedForSwap}
+            >
+              <ArrowUpDown className="h-4 w-4 text-white" />
+            </Button>
+          </div>
 
-        {/* To Token */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-300">To</Label>
-          <div className="relative">
-            <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
-              <div className="flex items-center gap-3 flex-1">
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => setShowToTokenSelector(true)}
-                  disabled={!isChainSupportedForSwap}
-                >
-                  {swapState.toToken ? (
-                    <>
-                      <TokenIcon token={swapState.toToken} />
-                      <span className="font-medium">{swapState.toToken.symbol}</span>
-                    </>
-                  ) : (
-                    <span className="text-gray-400">Select token</span>
-                  )}
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex flex-col items-end flex-1 min-w-0">
-                <div className="text-lg font-medium text-white truncate w-full text-right">
-                  {isLoadingQuote ? (
-                    <div className="animate-pulse">...</div>
-                  ) : (
-                    (() => {
-                      // Format toAmount to prevent overflow
-                      if (!swapState.toAmount || swapState.toAmount === '0.0') return '0.0';
-                      const num = parseFloat(swapState.toAmount);
-                      if (isNaN(num)) return '0.0';
+          {/* To Token */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-300">To</Label>
+            <div className="relative">
+              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
+                <div className="flex items-center gap-3 flex-1">
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
+                    onClick={() => setShowToTokenSelector(true)}
+                    disabled={!isChainSupportedForSwap}
+                  >
+                    {swapState.toToken ? (
+                      <>
+                        <TokenIcon token={swapState.toToken} />
+                        <span className="font-medium">{swapState.toToken.symbol}</span>
+                      </>
+                    ) : (
+                      <span className="text-gray-400">Select token</span>
+                    )}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-col items-end flex-1 min-w-0">
+                  <div className="text-lg font-medium text-white truncate w-full text-right">
+                    {isLoadingQuote ? (
+                      <div className="animate-pulse">...</div>
+                    ) : (
+                      (() => {
+                        // Format toAmount to prevent overflow
+                        if (!swapState.toAmount || swapState.toAmount === '0.0') return '0.0';
+                        const num = parseFloat(swapState.toAmount);
+                        if (isNaN(num)) return '0.0';
 
-                      // Format based on magnitude - always human readable, no scientific notation
-                      if (num >= 1000000) {
-                        return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                      } else if (num >= 1) {
-                        return num.toLocaleString('en-US', { maximumFractionDigits: 6, minimumFractionDigits: 2 });
-                      } else if (num >= 0.0001) {
-                        return num.toFixed(6);
-                      } else if (num > 0) {
-                        // For very small numbers, show up to 10 decimal places
-                        return num.toFixed(10).replace(/\.?0+$/, '');
-                      }
-                      return '0.0';
-                    })()
+                        // Format based on magnitude - always human readable, no scientific notation
+                        if (num >= 1000000) {
+                          return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                        } else if (num >= 1) {
+                          return num.toLocaleString('en-US', { maximumFractionDigits: 6, minimumFractionDigits: 2 });
+                        } else if (num >= 0.0001) {
+                          return num.toFixed(6);
+                        } else if (num > 0) {
+                          // For very small numbers, show up to 10 decimal places
+                          return num.toFixed(10).replace(/\.?0+$/, '');
+                        }
+                        return '0.0';
+                      })()
+                    )}
+                  </div>
+                  {swapState.toToken && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      Balance: {getTokenBalance(swapState.toToken)}
+                    </div>
                   )}
                 </div>
-                {swapState.toToken && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    Balance: {getTokenBalance(swapState.toToken)}
-                  </div>
-                )}
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Quote Information */}
-        {quote && swapState.fromToken && swapState.toToken && (
-          <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Price Impact</span>
-              <span className={`font-medium ${getPriceImpactColor(quote.priceImpact)}`}>
-                {formatPriceImpact(quote.priceImpact)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Route</span>
-              <span className="text-white text-xs">
-                {quote.route.length > 2 ? 'Multi-hop' : 'Direct'}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Slippage</span>
-              <span className="text-white">{swapState.slippage}%</span>
-            </div>
-          </div>
-        )}
-
-        {/* Settings Panel */}
-        {showSettings && (
-          <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-3">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-300">Slippage Tolerance</Label>
-              <div className="flex gap-2">
-                {['0.1', '0.5', '1.0'].map((value) => (
-                  <Button
-                    key={value}
-                    variant={swapState.slippage === value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSwapState(prev => ({ ...prev, slippage: value }))}
-                    className="text-xs"
-                  >
-                    {value}%
-                  </Button>
-                ))}
-                <Input
-                  type="number"
-                  placeholder="Custom"
-                  value={swapState.slippage}
-                  onChange={(e) => setSwapState(prev => ({ ...prev, slippage: e.target.value }))}
-                  className="w-20 text-xs"
-                  step="0.1"
-                  min="0.1"
-                  max="50"
-                />
+          {/* Quote Information */}
+          {quote && swapState.fromToken && swapState.toToken && (
+            <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Price Impact</span>
+                <span className={`font-medium ${getPriceImpactColor(quote.priceImpact || 0)}`}>
+                  {formatPriceImpact(quote.priceImpact || 0)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Route</span>
+                <span className="text-white text-xs">
+                  {quote.route.length > 2 ? 'Multi-hop' : 'Direct'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Slippage</span>
+                <span className="text-white">{swapState.slippage}%</span>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-300">Transaction Deadline</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={swapState.deadline}
-                  onChange={(e) => setSwapState(prev => ({ ...prev, deadline: e.target.value }))}
-                  className="w-20 text-xs"
-                  min="1"
-                  max="180"
-                />
-                <span className="text-xs text-gray-400">minutes</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Swap Button */}
-        <Button
-          onClick={handleSwap}
-          disabled={!canSwap}
-          className="w-full h-14 text-lg font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-2 border-amber-400/50 hover:border-amber-300 disabled:from-stone-800 disabled:to-stone-800 disabled:text-gray-400 disabled:border-stone-600 disabled:cursor-not-allowed transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-amber-500/50 disabled:shadow-none active:scale-[0.98]"
-        >
-          {isSwapping && (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
           )}
-          {getSwapButtonText()}
-        </Button>
 
-        {/* Transaction Status */}
-        {currentTransactionHash && (
-          <div className="relative p-3 bg-green-900/30 border border-green-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-green-400 text-sm">
-                <CheckCircle className="h-4 w-4" />
-                <span>Transaction Submitted</span>
+          {/* Settings Panel */}
+          {showSettings && (
+            <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-300">Slippage Tolerance</Label>
+                <div className="flex gap-2">
+                  {['0.1', '0.5', '1.0'].map((value) => (
+                    <Button
+                      key={value}
+                      variant={swapState.slippage === value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSwapState(prev => ({ ...prev, slippage: value }))}
+                      className="text-xs"
+                    >
+                      {value}%
+                    </Button>
+                  ))}
+                  <Input
+                    type="number"
+                    placeholder="Custom"
+                    value={swapState.slippage}
+                    onChange={(e) => setSwapState(prev => ({ ...prev, slippage: e.target.value }))}
+                    className="w-20 text-xs"
+                    step="0.1"
+                    min="0.1"
+                    max="50"
+                  />
+                </div>
               </div>
-              <button
-                onClick={() => setCurrentTransactionHash(null)}
-                className="text-green-400 hover:text-green-300 transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="text-xs text-green-300 break-all flex-1">
-                {currentTransactionHash.slice(0, 10)}...{currentTransactionHash.slice(-8)}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-300">Transaction Deadline</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={swapState.deadline}
+                    onChange={(e) => setSwapState(prev => ({ ...prev, deadline: e.target.value }))}
+                    className="w-20 text-xs"
+                    min="1"
+                    max="180"
+                  />
+                  <span className="text-xs text-gray-400">minutes</span>
+                </div>
               </div>
-              <a
-                href={getExplorerUrl(currentTransactionHash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors whitespace-nowrap"
-              >
-                <span>View</span>
-                <ExternalLink className="h-3 w-3" />
-              </a>
             </div>
-            <div className="text-xs text-green-400/60 mt-1">
-              Auto-dismissing in 8s
+          )}
+
+          {/* Swap Button */}
+          <Button
+            onClick={handleSwap}
+            disabled={!canSwap}
+            className="w-full h-14 text-lg font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-2 border-amber-400/50 hover:border-amber-300 disabled:from-stone-800 disabled:to-stone-800 disabled:text-gray-400 disabled:border-stone-600 disabled:cursor-not-allowed transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-amber-500/50 disabled:shadow-none active:scale-[0.98]"
+          >
+            {isSwapping && (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+            )}
+            {getSwapButtonText()}
+          </Button>
+
+          {/* Transaction Status */}
+          {currentTransactionHash && (
+            <div className="relative p-3 bg-green-900/30 border border-green-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-green-400 text-sm">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Transaction Submitted</span>
+                </div>
+                <button
+                  onClick={() => setCurrentTransactionHash(null)}
+                  className="text-green-400 hover:text-green-300 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="text-xs text-green-300 break-all flex-1">
+                  {currentTransactionHash.slice(0, 10)}...{currentTransactionHash.slice(-8)}
+                </div>
+                <a
+                  href={getExplorerUrl(currentTransactionHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors whitespace-nowrap"
+                >
+                  <span>View</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              <div className="text-xs text-green-400/60 mt-1">
+                Auto-dismissing in 8s
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </CardContent>
       </Card>
 

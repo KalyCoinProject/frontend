@@ -77,10 +77,10 @@ export const kalychainTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://testnet-rpc.kalychain.io/rpc'], // Update with actual testnet RPC
+      http: ['https://testnetrpc.kalychain.io/rpc'],
     },
     public: {
-      http: ['https://testnet-rpc.kalychain.io/rpc'],
+      http: ['https://testnetrpc.kalychain.io/rpc'],
     },
   },
   blockExplorers: {
@@ -131,10 +131,10 @@ export const clisha = defineChain({
 // Bridge-supported chains - Required for bridge functionality
 export const supportedChains = [
   kalychain,
+  kalychainTestnet, // Enabled for V3 testing
   arbitrum,
   bsc,
   clisha,
-  // kalychainTestnet, // Uncomment when testnet is available
 ] as const
 
 // Helper function to get chain by ID
@@ -198,7 +198,7 @@ export type ChainId = SupportedChain['id']
 // ============================================================================
 export const RPC_URLS: Record<number, string> = {
   [CHAIN_IDS.KALYCHAIN]: process.env.NEXT_PUBLIC_KALYCHAIN_RPC_URL || 'https://rpc.kalychain.io/rpc',
-  [CHAIN_IDS.KALYCHAIN_TESTNET]: process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnet-rpc.kalychain.io/rpc',
+  [CHAIN_IDS.KALYCHAIN_TESTNET]: process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnetrpc.kalychain.io/rpc',
   [CHAIN_IDS.ARBITRUM]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
   [CHAIN_IDS.BSC]: process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
   [CHAIN_IDS.CLISHA]: process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',

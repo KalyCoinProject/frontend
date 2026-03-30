@@ -54,7 +54,7 @@ async function fetchTokenPrice(symbol: string): Promise<TokenPriceData> {
 
   // Stablecoins are always $1
   if (STABLECOINS.includes(symbol)) {
-    return { price: 1.0, change24h: 0.1 };
+    return { price: 1.0, change24h: 0 };
   }
 
   const tokenAddress = KALYCHAIN_TOKEN_ADDRESSES[symbol];
@@ -107,19 +107,57 @@ async function fetchTokenPrice(symbol: string): Promise<TokenPriceData> {
   }
 
   let calculatedPrice = 0;
+  let change24h = 0;
 
   if (result.data?.pairs && result.data.pairs.length > 0) {
     const pair = result.data.pairs[0];
-    if (pair.token0.id.toLowerCase() === tokenAddress.toLowerCase()) {
+    const isToken0 = pair.token0.id.toLowerCase() === tokenAddress.toLowerCase();
+    if (isToken0) {
       calculatedPrice = parseFloat(pair.reserve1) / parseFloat(pair.reserve0);
     } else {
       calculatedPrice = parseFloat(pair.reserve0) / parseFloat(pair.reserve1);
+    }
+
+    // Fetch yesterday's price from pairDayDatas for real 24h change
+    try {
+      const dayDataResponse = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query GetPairDayData($pairId: ID!) {
+              pairDayDatas(first: 2, orderBy: date, orderDirection: desc, where: { pair: $pairId }) {
+                date
+                reserve0
+                reserve1
+              }
+            }
+          `,
+          variables: { pairId: pair.id }
+        })
+      });
+
+      const dayDataResult = await dayDataResponse.json();
+      const dayDatas = dayDataResult.data?.pairDayDatas;
+
+      if (dayDatas && dayDatas.length >= 2) {
+        const yesterday = dayDatas[1];
+        const yesterdayPrice = isToken0
+          ? parseFloat(yesterday.reserve1) / parseFloat(yesterday.reserve0)
+          : parseFloat(yesterday.reserve0) / parseFloat(yesterday.reserve1);
+
+        if (yesterdayPrice > 0) {
+          change24h = ((calculatedPrice - yesterdayPrice) / yesterdayPrice) * 100;
+        }
+      }
+    } catch (err) {
+      logger.debug('Could not fetch 24h price change, using 0:', err);
     }
   }
 
   return {
     price: calculatedPrice,
-    change24h: 2.5, // TODO: Calculate from historical data
+    change24h,
   };
 }
 

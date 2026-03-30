@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { WalletProviders } from '@/components/providers/WalletProviders';
 import { ToastProvider } from '@/components/ui/toast';
+import { ProtocolVersionProvider } from '@/contexts/ProtocolVersionContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -28,7 +29,9 @@ export default function RootLayout({
       <body className={`${inter.className}`} suppressHydrationWarning={true}>
         <ToastProvider>
           <WalletProviders>
-            {children}
+            <ProtocolVersionProvider>
+              {children}
+            </ProtocolVersionProvider>
           </WalletProviders>
         </ToastProvider>
       </body>

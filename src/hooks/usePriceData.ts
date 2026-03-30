@@ -347,7 +347,44 @@ export function useTokenPrice(symbol: string) {
           }
 
           setPrice(calculatedPrice);
-          setChange24h(2.5); // TODO: Calculate actual 24h change from historical data
+
+          // Calculate real 24h change from pairDayDatas
+          let change = 0;
+          if (result.data?.pairs && result.data.pairs.length > 0) {
+            try {
+              const pair = result.data.pairs[0];
+              const dayResponse = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  query: `
+                    query GetPairDayData($pairId: ID!) {
+                      pairDayDatas(first: 2, orderBy: date, orderDirection: desc, where: { pair: $pairId }) {
+                        date
+                        reserve0
+                        reserve1
+                      }
+                    }
+                  `,
+                  variables: { pairId: pair.id }
+                })
+              });
+              const dayResult = await dayResponse.json();
+              const dayDatas = dayResult.data?.pairDayDatas;
+              if (dayDatas && dayDatas.length >= 2) {
+                const isToken0 = pair.token0.id.toLowerCase() === tokenAddress.toLowerCase();
+                const yesterdayPrice = isToken0
+                  ? parseFloat(dayDatas[1].reserve1) / parseFloat(dayDatas[1].reserve0)
+                  : parseFloat(dayDatas[1].reserve0) / parseFloat(dayDatas[1].reserve1);
+                if (yesterdayPrice > 0) {
+                  change = ((calculatedPrice - yesterdayPrice) / yesterdayPrice) * 100;
+                }
+              }
+            } catch (dayErr) {
+              logger.debug('Could not fetch 24h change:', dayErr);
+            }
+          }
+          setChange24h(change);
 
         } else {
           throw new Error('Failed to fetch token price');
@@ -357,7 +394,7 @@ export function useTokenPrice(symbol: string) {
         // Only use stablecoin prices as fallback - no hardcoded token prices
         if (symbol === 'USDT' || symbol === 'USDC' || symbol === 'DAI') {
           setPrice(1.0);
-          setChange24h(0.1);
+          setChange24h(0);
         } else {
           logger.warn(`No market data available for ${symbol} - cannot provide price`);
           setPrice(0);

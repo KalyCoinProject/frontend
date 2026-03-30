@@ -494,3 +494,46 @@ export async function getPairMarketStats(pairAddress: string, chainId?: number) 
     return null;
   }
 }
+
+// V3 Queries
+export const V3_POOL_HOUR_DATA_QUERY = `
+  query GetV3PoolHourData($poolAddress: String!, $first: Int!, $skip: Int!) {
+    poolHourDatas(
+      where: { pool: $poolAddress }
+      first: $first
+      skip: $skip
+      orderBy: periodStartUnix
+      orderDirection: desc
+    ) {
+      id
+      periodStartUnix
+      pool {
+        id
+      }
+      volumeUSD
+      volumeToken0
+      volumeToken1
+      txCount
+      tvlUSD
+      open
+      high
+      low
+      close
+    }
+  }
+`;
+
+export async function getV3PoolHourData(poolAddress: string, subgraphUrl: string, first = 168, skip = 0) {
+  try {
+    const client = new GraphQLClient(subgraphUrl);
+    const result = await client.request(V3_POOL_HOUR_DATA_QUERY, {
+      poolAddress: poolAddress.toLowerCase(),
+      first,
+      skip
+    }) as any;
+    return result.poolHourDatas;
+  } catch (error) {
+    logger.error('Error fetching V3 pool hour data:', error);
+    return [];
+  }
+}

@@ -8,9 +8,12 @@ import { KALYSWAP_CONFIG } from './kalyswap';
 import { PANCAKESWAP_CONFIG } from './pancakeswap';
 import { UNISWAP_V2_CONFIG } from './uniswap-v2';
 
+import { KALYSWAP_TESTNET_CONFIG } from './kalyswap-testnet';
+
 // Main DEX configuration mapping
 export const DEX_CONFIGS: Record<SupportedDexChainId, DexConfig> = {
   [CHAIN_IDS.KALYCHAIN]: KALYSWAP_CONFIG,    // KalyChain
+  [CHAIN_IDS.KALYCHAIN_TESTNET]: KALYSWAP_TESTNET_CONFIG, // KalyChain Testnet
   56: PANCAKESWAP_CONFIG,   // BSC
   42161: UNISWAP_V2_CONFIG, // Arbitrum
 };
@@ -106,14 +109,14 @@ export function getNativeToken(chainId: number): { symbol: string; name: string;
 export function findTokenByAddress(address: string, chainId?: number): Token | null {
   if (chainId) {
     const tokens = getTokenList(chainId);
-    return tokens.find(token => 
+    return tokens.find(token =>
       token.address.toLowerCase() === address.toLowerCase()
     ) || null;
   }
 
   // Search across all chains
   for (const [chain, config] of Object.entries(DEX_CONFIGS)) {
-    const token = config.tokens.find(token => 
+    const token = config.tokens.find(token =>
       token.address.toLowerCase() === address.toLowerCase()
     );
     if (token) return token;
@@ -127,7 +130,7 @@ export function findTokenByAddress(address: string, chainId?: number): Token | n
  */
 export function findTokenBySymbol(symbol: string, chainId: number): Token | null {
   const tokens = getTokenList(chainId);
-  return tokens.find(token => 
+  return tokens.find(token =>
     token.symbol.toLowerCase() === symbol.toLowerCase()
   ) || null;
 }
@@ -160,8 +163,8 @@ export function getDefaultTokenPair(chainId: number): { tokenA: Token; tokenB: T
   if (chainId === 56) {
     // BSC: Prefer BUSD (better liquidity for BNB pairs), fallback to USDT, then USDC
     stablecoin = tokens.find(token => token.symbol === 'BUSD') ||
-                 tokens.find(token => token.symbol === 'USDT') ||
-                 tokens.find(token => token.symbol === 'USDC');
+      tokens.find(token => token.symbol === 'USDT') ||
+      tokens.find(token => token.symbol === 'USDC');
   } else {
     // Other chains: Prefer USDT, then USDC, then BUSD
     stablecoin = tokens.find(token =>

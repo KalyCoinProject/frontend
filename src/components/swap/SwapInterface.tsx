@@ -27,9 +27,11 @@ import { ROUTER_ABI, ERC20_ABI, WKLC_ABI } from '@/config/abis';
 
 // DEX Service for quotes and swaps
 import { DexService } from '@/services/dex';
+import { getKalySwapV3Service } from '@/services/dex/KalySwapV3Service';
 
 // Custom hooks
 import { useTokenBalances } from '@/hooks/useTokenBalance';
+import { useSwap } from '@/hooks/useSwap';
 
 // Price impact utilities
 import { calculatePriceImpact, formatPriceImpact, getPriceImpactColor } from '@/utils/priceImpact';
@@ -37,6 +39,10 @@ import { calculatePriceImpact, formatPriceImpact, getPriceImpactColor } from '@/
 // Token type from centralized types
 import { Token } from '@/config/dex/types';
 import { swapLogger as logger } from '@/lib/logger';
+
+// V2/V3 Protocol Toggle
+import ProtocolVersionToggle from './ProtocolVersionToggle';
+import { useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 
 // Props interface for SwapInterface
 interface SwapInterfaceProps {
@@ -53,7 +59,7 @@ const isWrapOperation = (fromToken: Token | null, toToken: Token | null): boolea
   // Use case-insensitive symbol check and also verify WKLC address
   const WKLC_ADDRESS = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3';
   const isToWKLC = toToken.symbol.toUpperCase() === 'WKLC' ||
-                   toToken.address.toLowerCase() === WKLC_ADDRESS.toLowerCase();
+    toToken.address.toLowerCase() === WKLC_ADDRESS.toLowerCase();
 
   return (fromToken.isNative === true) && isToWKLC;
 };
@@ -65,7 +71,7 @@ const isUnwrapOperation = (fromToken: Token | null, toToken: Token | null): bool
   // Use case-insensitive symbol check and also verify WKLC address
   const WKLC_ADDRESS = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3';
   const isFromWKLC = fromToken.symbol.toUpperCase() === 'WKLC' ||
-                     fromToken.address.toLowerCase() === WKLC_ADDRESS.toLowerCase();
+    fromToken.address.toLowerCase() === WKLC_ADDRESS.toLowerCase();
 
   return isFromWKLC && (toToken.isNative === true);
 };
@@ -90,8 +96,18 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // Get dynamic token list
-  const { tokens: availableTokens } = useTokenLists({ chainId: DEFAULT_CHAIN_ID });
+  // Check if user is using internal wallet and if it's on the correct chain
+  const isUsingInternalWallet = () => connector?.id === 'kalyswap-internal';
+  const internalWalletState = isUsingInternalWallet() ? internalWalletUtils.getState() : null;
+
+  // Determine active chain ID (Internal Wallet > External Wallet > Default)
+  const activeChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+
+  // Get dynamic token list based on active chain
+  const { tokens: availableTokens } = useTokenLists({ chainId: activeChainId });
+
+  // Protocol version (V2/V3)
+  const { protocolVersion, isV3, isV3Supported } = useProtocolVersion();
 
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useTokenBalances(availableTokens);
@@ -104,7 +120,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
 
   // Get default tokens from the available tokens list
   const defaultFromToken = availableTokens.find(t => t.isNative || t.symbol === 'KLC') || availableTokens[0] || null;
-  const defaultToToken = availableTokens.find(t => t.symbol === 'USDT') || availableTokens[1] || null;
+  const defaultToToken = availableTokens.find(t => t.symbol === 'BUSD' || t.symbol === 'USDT') || availableTokens[1] || null;
 
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>({
@@ -127,16 +143,13 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     }
   }, [propFromToken, propToToken]);
 
-
-
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'complete'>('idle');
 
-  // Check if user is using internal wallet and if it's on the correct chain
-  const isUsingInternalWallet = () => connector?.id === 'kalyswap-internal';
-  const internalWalletState = isUsingInternalWallet() ? internalWalletUtils.getState() : null;
-  const isWrongChain = isUsingInternalWallet() && internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN;
+  const isWrongChain = isUsingInternalWallet() &&
+    internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN &&
+    internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN_TESTNET;
   const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
 
   // Enhanced error handling
@@ -243,7 +256,9 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       }
 
       // Ensure we're using a KalyChain wallet for swaps
-      if (internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN) {
+      // Ensure we're using a KalyChain wallet for swaps
+      if (internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN &&
+        internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN_TESTNET) {
         throw new Error('Swaps are only available on KalyChain. Please switch to a KalyChain wallet.');
       }
 
@@ -338,7 +353,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     warning: string | null;
   }>({ priceImpact: '0', severity: 'low', warning: null });
 
-  // Get quote using DexService
+  // Get quote using DexService (V2) or KalySwapV3Service (V3)
   const getQuote = async (inputAmount: string, fromToken: Token, toToken: Token) => {
     if (!publicClient || !inputAmount || !fromToken || !toToken) return null;
 
@@ -350,32 +365,61 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         return inputAmount;
       }
 
-      logger.debug('🔍 Getting quote via DexService', {
-        fromToken: fromToken.symbol,
-        toToken: toToken.symbol,
-        inputAmount,
-        chainId: DEFAULT_CHAIN_ID
-      });
+      // Route to V3 or V2 based on protocol version
+      if (isV3 && isV3Supported) {
+        logger.debug('🔍 Getting quote via V3 Service', {
+          fromToken: fromToken.symbol,
+          toToken: toToken.symbol,
+          inputAmount,
+          protocol: 'V3'
+        });
 
-      // Use DexService for quote - it handles routing internally
-      const quoteResult = await DexService.getQuote(
-        DEFAULT_CHAIN_ID,
-        fromToken,
-        toToken,
-        inputAmount,
-        publicClient
-      );
+        // Use the current chain ID or fallback to default
+        const currentChainId = internalWalletState?.activeWallet?.chainId || CHAIN_IDS.KALYCHAIN;
+        logger.debug('Using Chain ID for V3 Service:', currentChainId);
 
-      logger.debug('✅ Quote received from DexService', {
-        amountOut: quoteResult.amountOut,
-        priceImpact: quoteResult.priceImpact,
-        route: quoteResult.route,
-        price: `${parseFloat(quoteResult.amountOut) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
-      });
+        const v3Service = getKalySwapV3Service(currentChainId);
+        const quoteResult = await v3Service.getQuote(fromToken, toToken, inputAmount, publicClient);
 
-      return quoteResult.amountOut;
+        logger.debug('✅ V3 Quote received', {
+          amountOut: quoteResult.amountOut,
+          priceImpact: quoteResult.priceImpact,
+          route: quoteResult.route,
+          price: `${parseFloat(quoteResult.amountOut) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
+        });
+
+        return quoteResult.amountOut;
+      } else {
+        // V2 path
+        logger.debug('🔍 Getting quote via V2 DexService', {
+          fromToken: fromToken.symbol,
+          toToken: toToken.symbol,
+          inputAmount,
+          chainId: DEFAULT_CHAIN_ID,
+          protocol: 'V2'
+        });
+
+        const currentChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+
+        const quoteResult = await DexService.getQuote(
+          currentChainId,
+          fromToken,
+          toToken,
+          inputAmount,
+          publicClient
+        );
+
+        logger.debug('✅ V2 Quote received', {
+          amountOut: quoteResult.amountOut,
+          priceImpact: quoteResult.priceImpact,
+          route: quoteResult.route,
+          price: `${parseFloat(quoteResult.amountOut) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
+        });
+
+        return quoteResult.amountOut;
+      }
     } catch (error) {
-      logger.error('❌ Error getting quote from DexService:', error);
+      logger.error(`❌ Error getting quote from ${isV3 ? 'V3' : 'V2'}:`, error);
       return null;
     }
   };
@@ -434,9 +478,39 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       return { priceImpact: '0', severity: 'low' as const, warning: null };
     }
 
+    // Skip if tokens are the same
+    if (fromToken.address.toLowerCase() === toToken.address.toLowerCase()) {
+      return { priceImpact: '0', severity: 'low' as const, warning: null };
+    }
+
     // Skip price impact calculation for wrap/unwrap operations
     if (isWrapOrUnwrapOperation(fromToken, toToken)) {
       return { priceImpact: '0', severity: 'low' as const, warning: null };
+    }
+
+    // For V3, fallback to V3 quote service (or return 0 as Price Impact is returned by getQuote)
+    if (isV3 && isV3Supported) {
+      try {
+        // Use the current chain ID or fallback to default
+        const currentChainId = internalWalletState?.activeWallet?.chainId || CHAIN_IDS.KALYCHAIN;
+        const v3Service = getKalySwapV3Service(currentChainId);
+        const quote = await v3Service.getQuote(fromToken, toToken, inputAmount, publicClient);
+
+        // Ensure priceImpact is defined and valid before processing
+        const impactString = quote.priceImpact !== undefined ? quote.priceImpact.toString() : '0';
+        const impactNumber = parseFloat(impactString);
+
+        const severity = impactNumber > 5 ? 'high' : impactNumber > 1 ? 'medium' : 'low';
+
+        return {
+          priceImpact: impactString,
+          severity: severity as any,
+          warning: severity === 'high' ? 'High price impact' : null
+        };
+      } catch (e) {
+        logger.error('Error calculating V3 price impact:', e);
+        return { priceImpact: '0', severity: 'low' as const, warning: null };
+      }
     }
 
     try {
@@ -534,7 +608,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         throw new Error('Tokens not selected');
       }
 
-      const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
+      const currentChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+      const routerAddress = getContractAddress('ROUTER', currentChainId);
       const amountIn = parseUnits(swapState.fromAmount, swapState.fromToken.decimals);
       const amountOutMin = parseUnits(swapState.toAmount, swapState.toToken.decimals);
 
@@ -548,7 +623,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       // Get swap route using DexService (handles routing automatically)
       logger.debug('🔍 Getting swap route from DexService...');
       const path = await DexService.getSwapRoute(
-        DEFAULT_CHAIN_ID,
+        currentChainId,
         swapState.fromToken,
         swapState.toToken,
         publicClient
@@ -578,7 +653,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         // Skip approval step for wrap/unwrap operations
         setCurrentStep('swapping');
 
-        const wklcAddress = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+        const wklcAddress = getContractAddress('WKLC', currentChainId);
 
         if (isWrap) {
           // KLC → wKLC: Call deposit() with KLC value
@@ -627,73 +702,135 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           );
         }
       } else {
-        // Regular DEX swap logic
-        logger.debug('🚀 Executing swap:', {
-          fromToken: swapState.fromToken.symbol,
-          toToken: swapState.toToken.symbol,
-          amountIn: swapState.fromAmount,
-          amountOutMin: swapState.toAmount,
-          path,
-          deadline: swapState.deadline + ' minutes'
-        });
+        // Regular DEX swap logic - route to V3 or V2 based on protocol version
+        if (isV3 && isV3Supported) {
+          // V3 Swap Path
+          logger.debug('🚀 Executing V3 swap:', {
+            fromToken: swapState.fromToken.symbol,
+            toToken: swapState.toToken.symbol,
+            amountIn: swapState.fromAmount,
+            amountOutMin: swapState.toAmount,
+            protocol: 'V3'
+          });
 
-        // Step 1: Approve token if not native
-        if (swapState.fromToken.isNative !== true) {
-          logger.debug('📝 Approving token...');
+          const v3Service = getKalySwapV3Service(currentChainId);
+          const v3RouterAddress = v3Service.getRouterAddress();
 
-          let approveHash: `0x${string}`;
+          // Step 1: Approve token if not native
+          if (swapState.fromToken.isNative !== true) {
+            logger.debug('📝 V3: Approving token...');
 
-          if (isUsingInternalWallet()) {
-            // For internal wallets, use our helper function with ERC20 ABI
-            approveHash = await executeContractCall(
-              swapState.fromToken.address,
-              'approve',
-              [routerAddress, amountIn],
-              BigInt(0),
-              ERC20_ABI
-            );
-          } else {
-            // For external wallets, use the standard approach
-            const tokenContract = getContract({
-              address: swapState.fromToken.address as `0x${string}`,
-              abi: ERC20_ABI,
-              client: walletClient,
-            });
+            let approveHash: `0x${string}`;
 
-            approveHash = await tokenContract.write.approve([routerAddress, amountIn]);
+            if (isUsingInternalWallet()) {
+              approveHash = await executeContractCall(
+                swapState.fromToken.address,
+                'approve',
+                [v3RouterAddress, amountIn],
+                BigInt(0),
+                ERC20_ABI
+              );
+            } else {
+              const tokenContract = getContract({
+                address: swapState.fromToken.address as `0x${string}`,
+                abi: ERC20_ABI,
+                client: walletClient,
+              });
+
+              approveHash = await tokenContract.write.approve([v3RouterAddress, amountIn]);
+            }
+
+            logger.debug(`📝 V3 Approval transaction hash: ${approveHash}`);
+            await publicClient.waitForTransactionReceipt({ hash: approveHash });
+            logger.debug('✅ V3 Token approved');
           }
 
-          logger.debug(`📝 Approval transaction hash: ${approveHash}`);
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
-          logger.debug('✅ Token approved');
-        }
+          // Step 2: Execute V3 swap
+          setCurrentStep('swapping');
+          logger.debug('🔄 Executing V3 swap...');
 
-        // Step 2: Execute swap
-        setCurrentStep('swapping');
-        logger.debug('🔄 Executing swap...');
+          // Build SwapParams for V3 service
+          const swapParams = {
+            tokenIn: swapState.fromToken,
+            tokenOut: swapState.toToken,
+            amountIn: swapState.fromAmount,
+            amountOutMin: swapState.toAmount,
+            to: address as string,
+            deadline: parseInt(swapState.deadline),
+            slippageTolerance: parseFloat(swapState.slippage),
+          };
 
-        if (swapState.fromToken.isNative === true) {
-          // KLC to Token
-          swapHash = await executeContractCall(
-            routerAddress,
-            'swapExactKLCForTokens',
-            [amountOutMinWithSlippage, path, address, deadline],
-            amountIn
-          );
-        } else if (swapState.toToken.isNative === true) {
-          // Token to KLC
-          swapHash = await executeContractCall(
-            routerAddress,
-            'swapExactTokensForKLC',
-            [amountIn, amountOutMinWithSlippage, path, address, deadline]
-          );
+          swapHash = await v3Service.executeSwap(swapParams, walletClient) as `0x${string}`;
         } else {
-          // Token to Token
-          swapHash = await executeContractCall(
-            routerAddress,
-            'swapExactTokensForTokens',
-            [amountIn, amountOutMinWithSlippage, path, address, deadline]
-          );
+          // V2 Swap Path
+          logger.debug('🚀 Executing V2 swap:', {
+            fromToken: swapState.fromToken.symbol,
+            toToken: swapState.toToken.symbol,
+            amountIn: swapState.fromAmount,
+            amountOutMin: swapState.toAmount,
+            path,
+            deadline: swapState.deadline + ' minutes',
+            protocol: 'V2'
+          });
+
+          // Step 1: Approve token if not native
+          if (swapState.fromToken.isNative !== true) {
+            logger.debug('📝 V2: Approving token...');
+
+            let approveHash: `0x${string}`;
+
+            if (isUsingInternalWallet()) {
+              // For internal wallets, use our helper function with ERC20 ABI
+              approveHash = await executeContractCall(
+                swapState.fromToken.address,
+                'approve',
+                [routerAddress, amountIn],
+                BigInt(0),
+                ERC20_ABI
+              );
+            } else {
+              // For external wallets, use the standard approach
+              const tokenContract = getContract({
+                address: swapState.fromToken.address as `0x${string}`,
+                abi: ERC20_ABI,
+                client: walletClient,
+              });
+
+              approveHash = await tokenContract.write.approve([routerAddress, amountIn]);
+            }
+
+            logger.debug(`📝 Approval transaction hash: ${approveHash}`);
+            await publicClient.waitForTransactionReceipt({ hash: approveHash });
+            logger.debug('✅ Token approved');
+          }
+
+          // Step 2: Execute V2 swap
+          setCurrentStep('swapping');
+          logger.debug('🔄 Executing V2 swap...');
+
+          if (swapState.fromToken.isNative === true) {
+            // KLC to Token
+            swapHash = await executeContractCall(
+              routerAddress,
+              'swapExactKLCForTokens',
+              [amountOutMinWithSlippage, path, address, deadline],
+              amountIn
+            );
+          } else if (swapState.toToken.isNative === true) {
+            // Token to KLC
+            swapHash = await executeContractCall(
+              routerAddress,
+              'swapExactTokensForKLC',
+              [amountIn, amountOutMinWithSlippage, path, address, deadline]
+            );
+          } else {
+            // Token to Token
+            swapHash = await executeContractCall(
+              routerAddress,
+              'swapExactTokensForTokens',
+              [amountIn, amountOutMinWithSlippage, path, address, deadline]
+            );
+          }
         }
       }
 
@@ -818,9 +955,12 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
 
   return (
     <Card className="w-full max-w-md">
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle>Swap</CardTitle>
+          <div className="flex items-center gap-3">
+            <CardTitle>Swap</CardTitle>
+            <ProtocolVersionToggle size="sm" showLabel={false} />
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -829,6 +969,11 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
             <Settings className="h-4 w-4" />
           </Button>
         </div>
+        {isV3 && (
+          <p className="text-xs text-purple-400 mt-1">
+            Concentrated liquidity • Better rates • Earn more fees
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Wrong chain warning */}
@@ -1019,8 +1164,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
               <h4 className="font-medium text-white mb-2">
                 Processing {
                   isWrapOperation(swapState.fromToken, swapState.toToken) ? 'Wrap' :
-                  isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
-                  'Swap'
+                    isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
+                      'Swap'
                 }
               </h4>
               <div className="space-y-2">
@@ -1048,8 +1193,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
                   <span>
                     {isWrapOperation(swapState.fromToken, swapState.toToken) ? '1' : '2'}. Execute {
                       isWrapOperation(swapState.fromToken, swapState.toToken) ? 'wrap' :
-                      isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'unwrap' :
-                      'swap'
+                        isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'unwrap' :
+                          'swap'
                     }
                   </span>
                 </div>
@@ -1070,8 +1215,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
               {currentStep === 'approving' && 'Approving...'}
               {currentStep === 'swapping' && (
                 isWrapOperation(swapState.fromToken, swapState.toToken) ? 'Wrapping...' :
-                isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrapping...' :
-                'Swapping...'
+                  isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrapping...' :
+                    'Swapping...'
               )}
             </div>
           ) : !isConnected ? (
@@ -1079,16 +1224,16 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
               <Wallet className="h-4 w-4 mr-2" />
               Connect Wallet to {
                 isWrapOperation(swapState.fromToken, swapState.toToken) ? 'Wrap' :
-                isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
-                'Swap'
+                  isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
+                    'Swap'
               }
             </>
           ) : isWrongChain ? (
             'Switch to KalyChain'
           ) : (
             isWrapOperation(swapState.fromToken, swapState.toToken) ? 'Wrap' :
-            isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
-            'Swap'
+              isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
+                'Swap'
           )}
         </Button>
       </CardContent>

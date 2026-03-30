@@ -48,12 +48,14 @@ function WalletProvidersClient({ children }: WalletProvidersClientProps) {
     }
   }, [isHydrated])
 
-  // Always wrap in QueryClientProvider for TanStack Query hooks
-  // Only wrap with wallet providers after hydration
+  // Always wrap in QueryClientProvider and WagmiProvider
+  // Only wrap with RainbowKitProvider after hydration to prevent UI mismatches
   if (!isHydrated) {
     return (
       <QueryClientProvider client={queryClient}>
-        {children}
+        <WagmiProvider config={wagmiConfig}>
+          {children}
+        </WagmiProvider>
       </QueryClientProvider>
     )
   }

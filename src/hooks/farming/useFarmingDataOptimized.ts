@@ -238,7 +238,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
 
       return stakingInfo;
     } catch (err) {
-      farmingLogger.error('Error creating staking info from multicall:', err);
+      farmingLogger.warn('Error creating staking info from multicall (V2 contract may not be deployed on this network):', err instanceof Error ? err.message : err);
       return createNAStakingInfo(pool, token0, token1, pairAddress);
     }
   }, [chainId, createNAStakingInfo])
@@ -706,15 +706,25 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
         hasInitiallyLoaded.current = true
         return
       } catch (err) {
-        farmingLogger.error('❌ Error fetching farming data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to fetch staking data')
+        const msg = err instanceof Error ? err.message : 'Failed to fetch staking data'
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED') || msg.includes('not available')) {
+          farmingLogger.warn('V2 farming data unavailable (backend/contracts not reachable)')
+        } else {
+          farmingLogger.error('❌ Error fetching farming data:', err)
+        }
+        setError(msg)
       } finally {
         setIsLoading(false)
         setIsFetching(false)
       }
     } catch (err) {
-      farmingLogger.error('❌ Error in fetchStakingDataOptimized:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch staking data')
+      const msg = err instanceof Error ? err.message : 'Failed to fetch staking data'
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED') || msg.includes('not available')) {
+        farmingLogger.warn('V2 farming fetch unavailable')
+      } else {
+        farmingLogger.error('❌ Error in fetchStakingDataOptimized:', err)
+      }
+      setError(msg)
       setIsLoading(false)
       setIsFetching(false)
     }

@@ -12,6 +12,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import TokenSelector from '@/components/pools/TokenSelector';
 import LiquidityForm from '@/components/pools/LiquidityForm';
 import { Token } from '@/config/dex/types';
+import ProtocolVersionToggle from '@/components/swap/ProtocolVersionToggle';
+import { useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 
 export default function PoolsPage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -22,6 +24,7 @@ export default function PoolsPage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { protocolVersion, isV3, isV3Supported } = useProtocolVersion();
 
   // Handle pre-selected tokens from URL parameters
   useEffect(() => {
@@ -34,9 +37,9 @@ export default function PoolsPage() {
     const getTokenDecimals = (address: string): number => {
       const usdtAddress = '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A';
       const usdcAddress = '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9';
-      
-      if (address.toLowerCase() === usdtAddress.toLowerCase() || 
-          address.toLowerCase() === usdcAddress.toLowerCase()) {
+
+      if (address.toLowerCase() === usdtAddress.toLowerCase() ||
+        address.toLowerCase() === usdcAddress.toLowerCase()) {
         return 6; // USDT and USDC have 6 decimals
       }
       return 18; // Default for other tokens
@@ -145,15 +148,22 @@ export default function PoolsPage() {
           {/* Main Card */}
           <Card className="pools-card">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold text-white">New position</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl font-semibold text-white">New position</CardTitle>
+                <ProtocolVersionToggle size="sm" />
+              </div>
+              {isV3 && (
+                <p className="text-sm text-purple-400 mt-2">
+                  V3 • Concentrated liquidity • Select your price range
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Steps Indicator */}
               <div className="flex items-center space-x-4">
                 <div className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium step-indicator ${
-                    currentStep >= 1 ? 'active' : ''
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium step-indicator ${currentStep >= 1 ? 'active' : ''
+                    }`}>
                     1
                   </div>
                   <span className="ml-2 text-sm font-medium text-white">
@@ -162,9 +172,8 @@ export default function PoolsPage() {
                 </div>
 
                 <div className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium step-indicator ${
-                    currentStep >= 2 ? 'active' : ''
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium step-indicator ${currentStep >= 2 ? 'active' : ''
+                    }`}>
                     2
                   </div>
                   <span className="ml-2 text-sm font-medium text-white">
@@ -248,6 +257,8 @@ export default function PoolsPage() {
               )}
             </CardContent>
           </Card>
+
+
         </div>
       </div>
     </MainLayout>

@@ -8,6 +8,17 @@ import { DexService } from '@/services/dex/DexService';
 import { ERC20_ABI } from '@/config/abis';
 import { useState, useCallback } from 'react';
 import { swapLogger } from '@/lib/logger';
+import { WKLC_ABI } from '@/config/abis';
+
+// Helper to check if tokens are Native <-> Wrapped Native
+const isWrapOperation = (tokenIn: Token, tokenOut: Token, wethAddress: string) => {
+  const isNativeIn = tokenIn.isNative;
+  const isWethIn = tokenIn.address.toLowerCase() === wethAddress.toLowerCase();
+  const isNativeOut = tokenOut.isNative;
+  const isWethOut = tokenOut.address.toLowerCase() === wethAddress.toLowerCase();
+
+  return (isNativeIn && isWethOut) || (isWethIn && isNativeOut);
+};
 
 interface UseDexSwapReturn {
   getQuote: (tokenIn: Token, tokenOut: Token, amountIn: string) => Promise<QuoteResult>;
@@ -39,12 +50,25 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
   ): Promise<QuoteResult> => {
     try {
       setError(null);
-      
+
       if (!publicClient) {
         throw new Error('Public client not available');
       }
 
       const service = await DexService.getDexService(chainId);
+
+      // Check for Wrap/Unwrap operation first
+      const wethAddress = await service.getWethAddress();
+      if (isWrapOperation(tokenIn, tokenOut, wethAddress)) {
+        return {
+          amountOut: amountIn, // 1:1 ratio
+          priceImpact: 0,
+          route: [tokenIn.address, tokenOut.address],
+          fee: 0,
+          gasEstimate: 50000n
+        };
+      }
+
       const quote = await service.getQuote(tokenIn, tokenOut, amountIn, publicClient);
 
       return quote;
@@ -155,7 +179,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
       });
 
       const result = await response.json();
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
@@ -273,6 +297,33 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
       const service = await DexService.getDexService(chainId);
       const routerAddress = service.getRouterAddress();
 
+      // Check for Wrap/Unwrap
+      const wethAddress = await service.getWethAddress();
+      if (isWrapOperation(params.tokenIn, params.tokenOut, wethAddress)) {
+        const isWrap = params.tokenIn.isNative;
+        const amountWei = parseUnits(params.amountIn, params.tokenIn.decimals);
+
+        if (isWrap) {
+          // Deposit (Wrap)
+          return await walletClient.writeContract({
+            address: wethAddress as `0x${string}`,
+            abi: WKLC_ABI,
+            functionName: 'deposit',
+            value: amountWei,
+            gas: 100000n,
+          });
+        } else {
+          // Withdraw (Unwrap)
+          return await walletClient.writeContract({
+            address: wethAddress as `0x${string}`,
+            abi: WKLC_ABI,
+            functionName: 'withdraw',
+            args: [amountWei],
+            gas: 100000n,
+          });
+        }
+      }
+
       // Check and handle approval for non-native tokens
       if (!params.tokenIn.isNative) {
         const isApproved = await checkApproval(params.tokenIn, params.amountIn, routerAddress);
@@ -310,7 +361,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
       setError(null);
 
       let txHash: string;
-      
+
       if (isInternalWallet) {
         txHash = await executeInternalWalletSwap(params);
       } else {

@@ -45,6 +45,7 @@ import { useChainId } from 'wagmi';
 import { useHydration } from '@/hooks/useHydration';
 import { Token } from '@/config/dex/types';
 import { logger } from '@/lib/logger';
+import { ProtocolVersionProvider, useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 import './swaps.css';
 
 // Swap interface
@@ -594,36 +595,38 @@ export default function SwapsPage() {
   );
 
   return (
-    <PriceDataProvider>
-      <SwapsPageContent
-        swapState={swapState}
-        setSwapState={setSwapState}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        loading={loading}
-        setLoading={setLoading}
-        showSettings={showSettings}
-        setShowSettings={setShowSettings}
-        isConnected={isConnected}
-        userAddress={userAddress}
-        router={router}
-        // Pass all the other state and functions
-        user={user}
-        activeWallet={activeWallet}
-        sendState={sendState}
-        setSendState={setSendState}
-        sendError={sendError}
-        setSendError={setSendError}
-        userTokens={userTokens}
-        handleSwap={handleSwap}
-        handleSend={handleSend}
-        handleSwapTokens={handleSwapTokens}
-        handleFromAmountChange={handleFromAmountChange}
-        TokenSelector={TokenSelector}
-        SendTokenSelector={SendTokenSelector}
-        SendTokenIcon={SendTokenIcon}
-      />
-    </PriceDataProvider>
+    <ProtocolVersionProvider>
+      <PriceDataProvider>
+        <SwapsPageContent
+          swapState={swapState}
+          setSwapState={setSwapState}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          loading={loading}
+          setLoading={setLoading}
+          showSettings={showSettings}
+          setShowSettings={setShowSettings}
+          isConnected={isConnected}
+          userAddress={userAddress}
+          router={router}
+          // Pass all the other state and functions
+          user={user}
+          activeWallet={activeWallet}
+          sendState={sendState}
+          setSendState={setSendState}
+          sendError={sendError}
+          setSendError={setSendError}
+          userTokens={userTokens}
+          handleSwap={handleSwap}
+          handleSend={handleSend}
+          handleSwapTokens={handleSwapTokens}
+          handleFromAmountChange={handleFromAmountChange}
+          TokenSelector={TokenSelector}
+          SendTokenSelector={SendTokenSelector}
+          SendTokenIcon={SendTokenIcon}
+        />
+      </PriceDataProvider>
+    </ProtocolVersionProvider>
   );
 }
 
@@ -683,6 +686,9 @@ function SwapsPageContent({
 }) {
   // Check if client is hydrated
   const isHydrated = useHydration();
+
+  // Get protocol version
+  const { protocolVersion } = useProtocolVersion();
 
   // Get current chain ID from wallet with error handling
   let wagmiChainId: number | undefined;
@@ -752,6 +758,10 @@ function SwapsPageContent({
       // KalyChain: KLC/USDT
       tokenA = dynamicTokens.find(token => token.symbol === 'KLC');
       tokenB = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    } else if (chainId === CHAIN_IDS.KALYCHAIN_TESTNET) {
+      // KalyChain Testnet: tKLS/BUSD
+      tokenA = dynamicTokens.find(token => token.symbol === 'tKLS' || token.symbol === 'KLC');
+      tokenB = dynamicTokens.find(token => token.symbol === 'BUSD');
     } else if (chainId === 56) {
       // BSC: BNB/BUSD (BUSD is the preferred stablecoin on BSC with better liquidity)
       // Using BUSD ensures the pair is structured correctly (BNB as base, BUSD as quote)
@@ -874,8 +884,8 @@ function SwapsPageContent({
   return (
     <MainLayout>
       <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div className="container mx-auto px-4 py-8">
+          <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
 
             {/* Left side - Trading Chart and Transaction Data */}
             <div className="xl:col-span-3 space-y-8">
@@ -887,6 +897,7 @@ function SwapsPageContent({
                   height={600}
                   showChartTypes={true}
                   className="w-full h-[500px] lg:h-[600px]"
+                  protocolVersion={protocolVersion}
                 />
               </div>
 
@@ -1073,11 +1084,10 @@ function SwapsPageContent({
                           </span>
                           {priceChange24h !== 0 && (
                             <span
-                              className={`text-xs px-1 py-0.5 rounded ${
-                                priceChange24h >= 0
-                                  ? 'text-green-300 bg-green-900/30'
-                                  : 'text-red-300 bg-red-900/30'
-                              }`}
+                              className={`text-xs px-1 py-0.5 rounded ${priceChange24h >= 0
+                                ? 'text-green-300 bg-green-900/30'
+                                : 'text-red-300 bg-red-900/30'
+                                }`}
                             >
                               {formatPriceChange(priceChange24h)}
                             </span>

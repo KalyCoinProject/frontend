@@ -78,18 +78,32 @@ export const WKLC_USDT_PAIR = '0x25fddaf836dc5e285823a644bb86e0b79c8e2'.toLowerC
 export const TESTNET_CONTRACTS = {
   // Core Infrastructure
   TOKEN_FACTORY_MANAGER: '0x312f9eD881cf492b9345413C5d482CEEF1B30c51',
-  
+  MULTICALL: '0xB74aD842A69196EF9b9D900d7d37450de56Ec700',
+
   // Token Factories
   STANDARD_TOKEN_FACTORY: '0x90bb7c432527C3D9D1278de3B5a2781B503a940C',
   LIQUIDITY_GENERATOR_TOKEN_FACTORY: '0x7eb64f6264fa120ffDE29531702bf60B17eCed8c',
-  
+
   // Launchpad Contracts
   PRESALE_FACTORY: '0xd20889cbF4d22A21228d775BB55c09c3FB21Ec31',
   FAIRLAUNCH_FACTORY: '0x16D0dD2ab80c872A3cF7752ED2B5900DC9961443',
-  
-  // DEX Integration
+
+  // DEX V2 Integration
+  FACTORY: '0xCd4AA7D066efc78793d19A9aE64B6798767B0c34',
   ROUTER: '0x7fD3173Eef473F64AD4553169D6d334d42Df1d95',
   WKLC: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3',
+
+  // DEX V3 Integration (deployed at block 42340167)
+  V3_CORE_FACTORY: '0x709E8f0C1dd43C81263fEAe6f0847E2d6506e57b',
+  V3_SWAP_ROUTER_02: '0x3246523054b0Bb123372ecf204740Cb04f6E713e',
+  V3_QUOTER_V2: '0x74BC8eE533ed6520457FC6C81cFC093A491e49AF',
+  V3_NONFUNGIBLE_POSITION_MANAGER: '0x8064558662896B2941B2BF88eb51182b4152d61B',
+  V3_MIGRATOR: '0x87055f15E95B37a36024B023c92737fF8a43783d',
+  V3_STAKER: '0x8831FF2f7Cd72b24c046fDcd2B5dDad6F56696E5',
+  V3_TICK_LENS: '0xD9205248cDF05aB3E40909C76fd2e59B2AF436fb',
+
+  // Base Tokens
+  KSWAP: '0x7659567Bc5057e7284856aAF331C4dea22AEd73E',
 } as const;
 
 // Get contracts for current network
@@ -108,13 +122,13 @@ export function getContracts(chainId: number) {
 export const CONTRACT_FUNCTIONS = {
   // StandardTokenFactory
   STANDARD_TOKEN_CREATE: 'create(string,string,uint8,uint256)',
-  
+
   // LiquidityGeneratorTokenFactory  
   LIQUIDITY_GENERATOR_CREATE: 'create(string,string,uint256,address,address,uint16,uint16,uint16)',
-  
+
   // PresaleFactory
   PRESALE_CREATE: 'create(address,address,uint256[2],uint256[2],uint256,uint256,uint256,uint256,uint256)',
-  
+
   // FairlaunchFactory
   FAIRLAUNCH_CREATE: 'createFairlaunch(address,address,bool,uint256,bool,uint256,uint256,uint256,uint256,uint256,address)',
 } as const;
@@ -168,9 +182,9 @@ export const NETWORK_CONFIG = {
   },
 } as const;
 
-// Default to mainnet
-export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_MAINNET;
-export const DEFAULT_CONTRACTS = MAINNET_CONTRACTS;
+// Default to testnet for V3 testing (change back to MAINNET for production)
+export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_TESTNET;
+export const DEFAULT_CONTRACTS = TESTNET_CONTRACTS;
 
 // Helper function to get contract address by name
 export function getContractAddress(contractName: keyof typeof MAINNET_CONTRACTS, chainId: number = DEFAULT_CHAIN_ID): string {
