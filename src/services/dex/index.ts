@@ -5,10 +5,14 @@
 export { DexService as default } from './DexService';
 export { DexService } from './DexService';
 
-// Individual service exports
+// Individual service exports (V2)
 export { KalySwapService } from './KalySwapService';
 export { PancakeSwapService } from './PancakeSwapService';
 export { UniswapV2Service } from './UniswapV2Service';
+
+// V3 Service exports
+export { BaseV3Service } from './BaseV3Service';
+export { KalySwapV3Service, getKalySwapV3Service } from './KalySwapV3Service';
 
 // Base service and interface exports
 export { BaseDexService } from './BaseDexService';
@@ -20,6 +24,35 @@ export {
   UnsupportedTokenError,
   SwapFailedError
 } from './IDexService';
+
+// V3 Staking Service exports
+export { V3StakingService, getV3StakingService } from './V3StakingService';
+export type {
+    IncentiveKey,
+    V3Incentive,
+    V3StakedPosition,
+    V3Deposit,
+    CreateIncentiveParams,
+} from './v3-staking-types';
+
+// V3 Interface and types
+export type { IV3DexService } from './IV3DexService';
+export type {
+  V3PoolInfo,
+  V3Position,
+  V3QuoteResult,
+  V3SwapParams,
+  V3AddLiquidityParams,
+  V3IncreaseLiquidityParams,
+  V3DecreaseLiquidityParams,
+  V3CollectParams,
+} from './IV3DexService';
+export {
+  V3PoolNotFoundError,
+  V3PositionNotFoundError,
+  V3SlippageError,
+} from './IV3DexService';
+
 
 // Re-export types from config
 export type {

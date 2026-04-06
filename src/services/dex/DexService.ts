@@ -32,12 +32,19 @@ export class DexService {
     let service: IDexService;
 
     switch (chainId) {
-      case CHAIN_IDS.KALYCHAIN: // KalyChain
+      case CHAIN_IDS.KALYCHAIN: // KalyChain (V2 for Mainnet currently)
         if (!KalySwapService) {
           const { KalySwapService: Service } = await import('./KalySwapService');
           KalySwapService = Service;
         }
         service = new KalySwapService();
+        break;
+
+      case CHAIN_IDS.KALYCHAIN_TESTNET: // KalyChain Testnet (V3)
+        // Use the V3 Service for Testnet as configured
+        const { getKalySwapV3Service } = await import('./KalySwapV3Service');
+        // Cast to any/IDexService as we verified compatibility for key methods
+        service = getKalySwapV3Service(chainId) as unknown as IDexService;
         break;
 
       case 56: // BSC

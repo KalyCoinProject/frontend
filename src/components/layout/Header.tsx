@@ -1,61 +1,21 @@
 'use client';
 
-import { logger } from '@/lib/logger';
-
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 import { ClientOnlyConnectWallet } from '@/components/wallet/ClientOnlyConnectWallet';
-import { internalWalletUtils } from '@/connectors/internalWallet';
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [forceRerender, setForceRerender] = useState(0);
   const pathname = usePathname();
 
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem('auth_token');
     setIsLoggedIn(!!token);
-  }, []);
-
-  // Listen to internal wallet state changes to force header re-render
-  useEffect(() => {
-    // Only set up event listeners on client side after hydration
-    if (typeof window === 'undefined') return;
-
-    const handleWalletChange = () => {
-      // Force re-render by updating state
-      setForceRerender(prev => prev + 1);
-    };
-
-    // Add a small delay to ensure internal wallet is initialized
-    const timeoutId = setTimeout(() => {
-      try {
-        // Listen to internal wallet events
-        internalWalletUtils.addEventListener('connect', handleWalletChange);
-        internalWalletUtils.addEventListener('disconnect', handleWalletChange);
-        internalWalletUtils.addEventListener('accountsChanged', handleWalletChange);
-        internalWalletUtils.addEventListener('chainChanged', handleWalletChange);
-      } catch (error) {
-        logger.warn('Failed to set up internal wallet event listeners:', error);
-      }
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      try {
-        internalWalletUtils.removeEventListener('connect', handleWalletChange);
-        internalWalletUtils.removeEventListener('disconnect', handleWalletChange);
-        internalWalletUtils.removeEventListener('accountsChanged', handleWalletChange);
-        internalWalletUtils.removeEventListener('chainChanged', handleWalletChange);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    };
   }, []);
 
   const handleLogout = () => {

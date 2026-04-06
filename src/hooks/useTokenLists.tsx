@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { tokenListService } from '@/services/tokenListService';
 import { Token } from '@/config/dex/types';
 import { KALYCHAIN_TOKENS } from '@/config/dex/tokens/kalychain';
+import { KALYCHAIN_TESTNET_TOKENS } from '@/config/dex/tokens/kalychain-testnet';
 import { logger } from '@/lib/logger';
 
 // Enhanced token interface with additional metadata from subgraph
@@ -99,7 +100,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
 
       if (response.ok) {
         const result = await response.json();
-        
+
         if (result.errors) {
           logger.error('GraphQL errors:', result.errors);
           return [];
@@ -206,6 +207,18 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
           };
           break;
 
+        case CHAIN_IDS.KALYCHAIN_TESTNET: // KalyChain Testnet
+          nativeToken = {
+            chainId: CHAIN_IDS.KALYCHAIN_TESTNET,
+            address: '0x0000000000000000000000000000000000000000',
+            decimals: 18,
+            name: 'KalyCoin',
+            symbol: 'KLC',
+            logoURI: '/tokens/klc.png',
+            isNative: true
+          };
+          break;
+
         case 56: // BSC
           nativeToken = {
             chainId: 56,
@@ -260,6 +273,9 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
       if (chainId === CHAIN_IDS.KALYCHAIN) {
         tokenListTokens = [...KALYCHAIN_TOKENS];
         logger.debug(`Using local KalyChain token list: ${tokenListTokens.length} tokens`);
+      } else if (chainId === CHAIN_IDS.KALYCHAIN_TESTNET) {
+        tokenListTokens = [...KALYCHAIN_TESTNET_TOKENS];
+        logger.debug(`Using local KalyChain Testnet token list: ${tokenListTokens.length} tokens`);
       } else {
         // For other chains, fetch from external sources
         tokenListTokens = await tokenListService.getTokensForChain(chainId);
@@ -347,7 +363,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
 
   const searchTokens = useCallback((query: string): EnhancedToken[] => {
     if (!query.trim()) return tokens;
-    
+
     const lowerQuery = query.toLowerCase();
     return tokens.filter(token =>
       token.symbol.toLowerCase().includes(lowerQuery) ||

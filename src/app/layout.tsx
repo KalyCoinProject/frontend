@@ -1,10 +1,19 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { WalletProviders } from '@/components/providers/WalletProviders';
 import { ToastProvider } from '@/components/ui/toast';
+import { ProtocolVersionProvider } from '@/contexts/ProtocolVersionContext';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = localFont({
+  src: [
+    { path: '../fonts/Inter-Regular.ttf', weight: '400', style: 'normal' },
+    { path: '../fonts/Inter-Medium.ttf', weight: '500', style: 'normal' },
+    { path: '../fonts/Inter-SemiBold.ttf', weight: '600', style: 'normal' },
+    { path: '../fonts/Inter-Bold.ttf', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'KalySwap - Decentralized Exchange',
@@ -28,7 +37,9 @@ export default function RootLayout({
       <body className={`${inter.className}`} suppressHydrationWarning={true}>
         <ToastProvider>
           <WalletProviders>
-            {children}
+            <ProtocolVersionProvider>
+              {children}
+            </ProtocolVersionProvider>
           </WalletProviders>
         </ToastProvider>
       </body>

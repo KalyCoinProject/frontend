@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ProtocolVersionToggle from '@/components/swap/ProtocolVersionToggle';
+import { useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 
-// Import launchpad components (to be created)
+// Import launchpad components
 import Overview from '@/components/launchpad/Overview';
 import TokenCreator from '@/components/launchpad/TokenCreator';
 import PresaleCreator from '@/components/launchpad/PresaleCreator';
@@ -19,10 +21,14 @@ import ConfirmedProjects from '@/components/launchpad/ConfirmedProjects';
 export default function LaunchpadPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const router = useRouter();
+  const { protocolVersion, isV3Supported } = useProtocolVersion();
 
   const handleSwitchToPresale = () => {
     setActiveTab('presale');
   };
+
+  // Show the toggle on tabs that have V3 variants
+  const showVersionToggle = activeTab === 'presale' || activeTab === 'fairlaunch';
 
   return (
     <MainLayout>
@@ -64,7 +70,8 @@ export default function LaunchpadPage() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-5 mb-8 launchpad-tabs">
+                <div className="flex items-center justify-between mb-8">
+                  <TabsList className="grid w-full grid-cols-5 launchpad-tabs">
                   <TabsTrigger value="overview" className="text-sm font-medium launchpad-tab">
                     Overview
                   </TabsTrigger>
@@ -80,7 +87,13 @@ export default function LaunchpadPage() {
                   <TabsTrigger value="confirmed-projects" className="text-sm font-medium launchpad-tab">
                     Confirmed Projects
                   </TabsTrigger>
-                </TabsList>
+                  </TabsList>
+                  {showVersionToggle && (
+                    <div className="ml-4 flex-shrink-0">
+                      <ProtocolVersionToggle size="sm" />
+                    </div>
+                  )}
+                </div>
 
                 <TabsContent value="overview" className="mt-0">
                   <Overview onSwitchToPresale={handleSwitchToPresale} />
@@ -91,11 +104,11 @@ export default function LaunchpadPage() {
                 </TabsContent>
 
                 <TabsContent value="presale" className="mt-0">
-                  <PresaleCreator />
+                  <PresaleCreator dexVersion={protocolVersion} />
                 </TabsContent>
 
                 <TabsContent value="fairlaunch" className="mt-0">
-                  <FairlaunchCreator />
+                  <FairlaunchCreator dexVersion={protocolVersion} />
                 </TabsContent>
 
                 <TabsContent value="confirmed-projects" className="mt-0">

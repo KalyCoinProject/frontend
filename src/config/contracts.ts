@@ -29,9 +29,14 @@ export const MAINNET_CONTRACTS = {
   STANDARD_TOKEN_FACTORY: '0xB9228A684822D557ABd419814bC6b536Fa34E3BD',
   LIQUIDITY_GENERATOR_TOKEN_FACTORY: '0xa13567796eeB7357f48caC8d83b4c1b885B66762',
 
-  // Launchpad Contracts
+  // Launchpad Contracts (V2)
   PRESALE_FACTORY: '0x42CA326c90868e034293C679BD61F5B0e6c88149',
   FAIRLAUNCH_FACTORY: '0xcf2A1325b32c3818B24171513cc9F71ae74592B9',
+
+  // Launchpad Contracts (V3 — deployed 2026-04-06)
+  PRESALE_V3_FACTORY: '0x661614f97bA9e4f284760F5a9C824bC8342143eF',
+  FAIRLAUNCH_V3_FACTORY: '0x9Ea7cf04c9c236e54f14671c9FE1d2B88b6df671',
+  V3_LIQUIDITY_HELPER: '0xf5864C586E0e81160E61E25C0011906bf9A34bBf',
 
   // DEX Integration
   FACTORY: '0xD42Af909d323D88e0E933B6c50D3e91c279004ca',
@@ -78,18 +83,37 @@ export const WKLC_USDT_PAIR = '0x25fddaf836dc5e285823a644bb86e0b79c8e2'.toLowerC
 export const TESTNET_CONTRACTS = {
   // Core Infrastructure
   TOKEN_FACTORY_MANAGER: '0x312f9eD881cf492b9345413C5d482CEEF1B30c51',
-  
+  MULTICALL: '0xB74aD842A69196EF9b9D900d7d37450de56Ec700',
+
   // Token Factories
   STANDARD_TOKEN_FACTORY: '0x90bb7c432527C3D9D1278de3B5a2781B503a940C',
   LIQUIDITY_GENERATOR_TOKEN_FACTORY: '0x7eb64f6264fa120ffDE29531702bf60B17eCed8c',
-  
-  // Launchpad Contracts
+
+  // Launchpad Contracts (V2)
   PRESALE_FACTORY: '0xd20889cbF4d22A21228d775BB55c09c3FB21Ec31',
   FAIRLAUNCH_FACTORY: '0x16D0dD2ab80c872A3cF7752ED2B5900DC9961443',
-  
-  // DEX Integration
+
+  // Launchpad Contracts (V3 — uses V3 pools for liquidity)
+  PRESALE_V3_FACTORY: '0xd79577196ba6a33cC96A338cE64f60E60db61A99',
+  FAIRLAUNCH_V3_FACTORY: '0xFec9b531b422049971c288DF1228A1B8b07bB027',
+  V3_LIQUIDITY_HELPER: '0xA00B4AF6107dB0008F81Db1fF4C208Ed28dfaFD6',
+
+  // DEX V2 Integration
+  FACTORY: '0xCd4AA7D066efc78793d19A9aE64B6798767B0c34',
   ROUTER: '0x7fD3173Eef473F64AD4553169D6d334d42Df1d95',
   WKLC: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3',
+
+  // DEX V3 Integration (deployed at block 42340167)
+  V3_CORE_FACTORY: '0x709E8f0C1dd43C81263fEAe6f0847E2d6506e57b',
+  V3_SWAP_ROUTER_02: '0x3246523054b0Bb123372ecf204740Cb04f6E713e',
+  V3_QUOTER_V2: '0x74BC8eE533ed6520457FC6C81cFC093A491e49AF',
+  V3_NONFUNGIBLE_POSITION_MANAGER: '0x8064558662896B2941B2BF88eb51182b4152d61B',
+  V3_MIGRATOR: '0x87055f15E95B37a36024B023c92737fF8a43783d',
+  V3_STAKER: '0x8831FF2f7Cd72b24c046fDcd2B5dDad6F56696E5',
+  V3_TICK_LENS: '0xD9205248cDF05aB3E40909C76fd2e59B2AF436fb',
+
+  // Base Tokens
+  KSWAP: '0x7659567Bc5057e7284856aAF331C4dea22AEd73E',
 } as const;
 
 // Get contracts for current network
@@ -108,13 +132,13 @@ export function getContracts(chainId: number) {
 export const CONTRACT_FUNCTIONS = {
   // StandardTokenFactory
   STANDARD_TOKEN_CREATE: 'create(string,string,uint8,uint256)',
-  
+
   // LiquidityGeneratorTokenFactory  
   LIQUIDITY_GENERATOR_CREATE: 'create(string,string,uint256,address,address,uint16,uint16,uint16)',
-  
+
   // PresaleFactory
   PRESALE_CREATE: 'create(address,address,uint256[2],uint256[2],uint256,uint256,uint256,uint256,uint256)',
-  
+
   // FairlaunchFactory
   FAIRLAUNCH_CREATE: 'createFairlaunch(address,address,bool,uint256,bool,uint256,uint256,uint256,uint256,uint256,address)',
 } as const;
@@ -168,9 +192,9 @@ export const NETWORK_CONFIG = {
   },
 } as const;
 
-// Default to mainnet
-export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_MAINNET;
-export const DEFAULT_CONTRACTS = MAINNET_CONTRACTS;
+// Default to testnet for V3 testing (change back to MAINNET for production)
+export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_TESTNET;
+export const DEFAULT_CONTRACTS = TESTNET_CONTRACTS;
 
 // Helper function to get contract address by name
 export function getContractAddress(contractName: keyof typeof MAINNET_CONTRACTS, chainId: number = DEFAULT_CHAIN_ID): string {

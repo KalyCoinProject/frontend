@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { parseUnits, formatUnits, getContract, encodeFunctionData } from 'viem';
+import { parseUnits, formatUnits, getContract } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { ROUTER_ABI, FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
-import { internalWalletUtils } from '@/connectors/internalWallet';
 import { DexService, Token as DexToken } from '@/services/dex';
 import { poolLogger } from '@/lib/logger';
 
@@ -45,151 +44,38 @@ interface ApprovalInfo {
 export function usePools() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [approvalStates, setApprovalStates] = useState<{[key: string]: ApprovalState}>({});
+  const [approvalStates, setApprovalStates] = useState<{ [key: string]: ApprovalState }>({});
 
   // Wagmi hooks for wallet interaction
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // Check if using internal wallet
-  const isUsingInternalWallet = () => {
-    return connector?.id === 'kalyswap-internal';
-  };
-
-  // Helper function to prompt for password (similar to swap interface)
-  const promptForPassword = (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-          <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this transaction.</p>
-          <input
-            type="password"
-            placeholder="Enter your wallet password"
-            class="w-full p-3 border rounded-lg mb-4 password-input"
-            autofocus
-          />
-          <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-            <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-      const handleConfirm = () => {
-        const password = passwordInput.value;
-        document.body.removeChild(modal);
-        resolve(password || null);
-      };
-
-      const handleCancel = () => {
-        document.body.removeChild(modal);
-        resolve(null);
-      };
-
-      confirmBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-      passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConfirm();
-      });
-
-      document.body.appendChild(modal);
-    });
-  };
-
-  // Helper function to execute contract calls with proper internal wallet handling
+  // Helper function to execute contract calls via standard Wagmi writeContract
   const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi = ROUTER_ABI) => {
-    if (isUsingInternalWallet()) {
-      const internalWalletState = internalWalletUtils.getState();
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No internal wallet connected');
-      }
+    if (!walletClient) throw new Error('Wallet client not available');
 
-      const password = await promptForPassword();
-      if (!password) {
-        throw new Error('Password required for transaction signing');
-      }
+    poolLogger.debug('Executing contract call:', {
+      address: contractAddress,
+      functionName,
+      args,
+      value: value?.toString()
+    });
 
-      const data = encodeFunctionData({
+    try {
+      const result = await walletClient.writeContract({
+        address: contractAddress as `0x${string}`,
         abi,
         functionName,
-        args
-      });
-
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value: value?.toString() || '0',
-              data: data,
-              password: password,
-              chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '500000'
-            }
-          }
-        }),
-      });
-
-      const result = await response.json();
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      return result.data.sendContractTransaction.hash as `0x${string}`;
-    } else {
-      if (!walletClient) throw new Error('Wallet client not available');
-
-      poolLogger.debug('Executing external wallet contract call:', {
-        address: contractAddress,
-        functionName,
         args,
-        value: value?.toString()
+        value,
       });
 
-      try {
-        // Try without gas limit first to let wallet estimate
-        const result = await walletClient.writeContract({
-          address: contractAddress as `0x${string}`,
-          abi,
-          functionName,
-          args,
-          value,
-        });
-
-        poolLogger.debug('Contract call successful:', result);
-        return result;
-      } catch (err) {
-        poolLogger.error('Contract call failed:', err);
-        throw err;
-      }
+      poolLogger.debug('Contract call successful:', result);
+      return result;
+    } catch (err) {
+      poolLogger.error('Contract call failed:', err);
+      throw err;
     }
   };
 
@@ -431,7 +317,7 @@ export function usePools() {
   ): Promise<OptimalAmounts | null> => {
     try {
       const pairInfo = await getPairInfo(tokenA, tokenB);
-      
+
       if (!pairInfo || !pairInfo.exists) {
         // For new pools, user can set any ratio
         return null;
@@ -449,7 +335,7 @@ export function usePools() {
 
       // Determine which token is token0 and token1
       const isTokenAFirst = tokenA.toLowerCase() === pairInfo.token0.toLowerCase();
-      
+
       if (inputToken === 'A') {
         amountA = amount;
         if (isTokenAFirst) {
@@ -785,15 +671,117 @@ export function usePools() {
 
       if (response.ok) {
         const data = await response.json();
-        return data.data?.liquidityPositions || [];
+        const positions = data.data?.liquidityPositions || [];
+
+        // If we found positions from subgraph, return them
+        if (positions.length > 0) {
+          poolLogger.debug('Found user positions from subgraph:', positions);
+          return positions;
+        }
       }
-      
-      return [];
+
+      // FALLBACK: If subgraph returns empty (common on testnet), check common pairs manually
+      // This is less efficient but necessary for testnet functionality
+      poolLogger.info('Subgraph returned no positions, conducting manual fallback discovery...');
+
+      // Import KALYCHAIN_TOKENS dynamically to avoid circular dependencies if any
+      const { KALYCHAIN_TOKENS } = await import('@/config/dex/tokens/kalychain');
+
+      poolLogger.info(`Fallback discovery loaded ${KALYCHAIN_TOKENS.length} tokens.`);
+
+      const discoveredPositions = [];
+      const checkedPairs = new Set<string>();
+
+      // Base tokens to check against.
+      // We explicitly look for these common tokens AND any specific testnet tokens we just found.
+      const baseTokens = KALYCHAIN_TOKENS.filter(t =>
+        ['KLC', 'wKLC', 'USDT', 'USDC', 'KSWAP', 'tKLS', 'BUSD'].includes(t.symbol)
+      );
+
+      poolLogger.debug('Fallback checking against base tokens:', baseTokens.map(t => t.symbol));
+
+      // Check pairs between Base Tokens and All Other Tokens
+      // Optimized to avoid duplicates (A-B and B-A)
+      for (const baseToken of baseTokens) {
+        for (const token of KALYCHAIN_TOKENS) {
+          if (baseToken.address === token.address) continue; // Skip self
+
+          // Create a canonical key to avoid checking A-B and B-A twice
+          const [t0, t1] = baseToken.address.toLowerCase() < token.address.toLowerCase()
+            ? [baseToken.address, token.address]
+            : [token.address, baseToken.address];
+
+          const pairKey = `${t0}-${t1}`;
+          if (checkedPairs.has(pairKey)) continue;
+          checkedPairs.add(pairKey);
+
+          try {
+            // 1. Get Pair Info (this will call Factory check -> Contract check)
+            const pairInfo = await getPairInfo(baseToken.address, token.address);
+
+            if (pairInfo) {
+              poolLogger.debug(`Checked ${baseToken.symbol}-${token.symbol}: ${pairInfo.exists ? 'EXISTS' : 'NO_EXIST'} at ${pairInfo.address}`);
+            }
+
+            if (pairInfo && pairInfo.exists) {
+              // 2. Check User's Balance in this pair
+              const pairContract = getContract({
+                address: pairInfo.address as `0x${string}`,
+                abi: ERC20_ABI,
+                client: publicClient!
+              });
+
+              const balance = await pairContract.read.balanceOf([userAddress as `0x${string}`]) as bigint;
+
+              if (balance > 0n) {
+                poolLogger.info(`Found position: ${baseToken.symbol}/${token.symbol} Balance: ${formatUnits(balance, 18)}`);
+                poolLogger.debug(`Found hidden position: ${baseToken.symbol}/${token.symbol} (${formatUnits(balance, 18)} LP)`);
+
+                // Construct a fake object matching the subgraph structure
+                discoveredPositions.push({
+                  id: `${pairInfo.address}-${userAddress}`, // Unique ID convention
+                  liquidityTokenBalance: formatUnits(balance, 18),
+                  pair: {
+                    id: pairInfo.address,
+                    token0: {
+                      id: pairInfo.token0, // Kept for consistency if needed
+                      address: pairInfo.token0, // REQUIRED for Service usage
+                      symbol: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
+                      name: 'Unknown',
+                      decimals: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
+                      chainId: DEFAULT_CHAIN_ID,
+                      logoURI: '',
+                    },
+                    token1: {
+                      id: pairInfo.token1,
+                      address: pairInfo.token1, // REQUIRED for Service usage
+                      symbol: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
+                      name: 'Unknown',
+                      decimals: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
+                      chainId: DEFAULT_CHAIN_ID,
+                      logoURI: '',
+                    },
+                    reserve0: pairInfo.reserve0,
+                    reserve1: pairInfo.reserve1,
+                    totalSupply: pairInfo.totalSupply
+                  }
+                });
+              }
+            }
+          } catch (err) {
+            // Continue searching regardless of error on one pair
+            poolLogger.debug(`Manual check failed for ${baseToken.symbol}/${token.symbol}`, err);
+          }
+        }
+      }
+
+      return discoveredPositions;
+
     } catch (err) {
       poolLogger.error('Error fetching user pools:', err);
       return [];
     }
-  }, []);
+  }, [publicClient, getPairInfo]);
 
   // Get all pairs from subgraph for browsing
   const getAllPairs = useCallback(async (first: number = 25, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {

@@ -16,9 +16,7 @@ import {
 import { ProjectData } from '@/hooks/launchpad/useProjectDetails'
 import { useWallet } from '@/hooks/useWallet'
 import { useAccount, useWalletClient } from 'wagmi'
-import { encodeFunctionData } from 'viem'
-import { PRESALE_ABI, FAIRLAUNCH_ABI } from '@/config/abis'
-import { internalWalletUtils } from '@/connectors/internalWallet'
+import { PRESALE_ABI, FAIRLAUNCH_ABI, PRESALE_V3_ABI, FAIRLAUNCH_V3_ABI } from '@/config/abis'
 import { launchpadLogger } from '@/lib/logger'
 
 interface ProjectOwnerControlsProps {
@@ -33,8 +31,16 @@ export default function ProjectOwnerControls({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const { isConnected, address } = useWallet()
-  const { address: wagmiAddress, connector } = useAccount()
+  const { address: wagmiAddress } = useAccount()
   const { data: walletClient } = useWalletClient()
+
+  // Get appropriate ABI based on project type and dex version
+  const getABI = () => {
+    if (projectData.dexVersion === 'v3') {
+      return projectData.type === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI
+    }
+    return projectData.type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+  }
 
   // Check if connected wallet is the project owner
   const isOwner = isConnected && address && projectData.owner &&
@@ -45,7 +51,7 @@ export default function ProjectOwnerControls({
     return null
   }
 
-  // Execute contract call with support for both wallet types
+  // Execute contract call via standard Wagmi writeContract
   const executeContractCall = useCallback(async (
     contractAddress: string,
     abi: any,
@@ -56,85 +62,22 @@ export default function ProjectOwnerControls({
       throw new Error('Wallet not connected')
     }
 
-    // Check if using internal wallet
-    if (connector?.id === 'internal') {
-      // Internal wallet flow
-      const internalWalletState = internalWalletUtils.getState()
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No active internal wallet')
-      }
-
-      const password = prompt('Enter your wallet password to finalize the project:')
-      if (!password) {
-        throw new Error('Password required for transaction')
-      }
-
-      const functionData = encodeFunctionData({
-        abi,
-        functionName,
-        args
-      })
-
-      const token = localStorage.getItem('authToken')
-      if (!token) {
-        throw new Error('Authentication required')
-      }
-
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value: '0',
-              data: functionData,
-              password: password,
-              chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '5000000' // 5M gas limit like the working test script
-            }
-          }
-        }),
-      })
-
-      const result = await response.json()
-      if (result.errors) {
-        throw new Error(result.errors[0].message)
-      }
-
-      return result.data.sendContractTransaction.hash
-    } else {
-      // External wallet flow
-      if (!walletClient) {
-        throw new Error('Wallet client not available')
-      }
-
-      const hash = await walletClient.writeContract({
-        address: contractAddress as `0x${string}`,
-        abi,
-        functionName,
-        args,
-        gas: BigInt(5000000), // 5M gas limit like the working test script
-        maxFeePerGas: BigInt(30000000000), // 30 gwei
-        maxPriorityFeePerGas: BigInt(3000000000), // 3 gwei
-      })
-
-      return hash
+    if (!walletClient) {
+      throw new Error('Wallet client not available')
     }
-  }, [isConnected, wagmiAddress, connector, walletClient])
+
+    const hash = await walletClient.writeContract({
+      address: contractAddress as `0x${string}`,
+      abi,
+      functionName,
+      args,
+      gas: BigInt(5000000), // 5M gas limit like the working test script
+      maxFeePerGas: BigInt(30000000000), // 30 gwei
+      maxPriorityFeePerGas: BigInt(3000000000), // 3 gwei
+    })
+
+    return hash
+  }, [isConnected, wagmiAddress, walletClient])
 
   const handleFinalize = async () => {
     setIsLoading(true)
@@ -144,7 +87,7 @@ export default function ProjectOwnerControls({
         throw new Error('Contract address not available')
       }
 
-      const abi = projectData.type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+      const abi = getABI()
 
       const hash = await executeContractCall(
         projectData.contractAddress,
@@ -194,7 +137,7 @@ export default function ProjectOwnerControls({
         throw new Error('Contract address not available')
       }
 
-      const abi = projectData.type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+      const abi = getABI()
 
       const functionName = projectData.type === 'presale' ? 'withdrawRemainingFunds' : 'withdrawRemainingTokens'
 
@@ -229,7 +172,7 @@ export default function ProjectOwnerControls({
         throw new Error('Contract address not available')
       }
 
-      const abi = projectData.type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+      const abi = getABI()
 
       const hash = await executeContractCall(
         projectData.contractAddress,

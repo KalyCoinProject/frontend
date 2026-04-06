@@ -33,8 +33,7 @@ import {
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { parseEther, getContract, encodeFunctionData } from 'viem';
-import { internalWalletUtils } from '@/connectors/internalWallet';
+import { parseEther, getContract } from 'viem';
 
 interface TokenFormData {
   name: string;
@@ -68,61 +67,9 @@ interface LiquidityGeneratorTokenParams {
   charityBps: number;
 }
 
-// Helper function to check if using internal wallet
-const isUsingInternalWallet = (connector: any) => {
-  return connector?.id === 'kalyswap-internal';
-};
-
-// Helper function to prompt for password (same as staking)
-const promptForPassword = (): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-        <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this token creation transaction.</p>
-        <input
-          type="password"
-          placeholder="Enter your wallet password"
-          class="w-full p-3 border rounded-lg mb-4 password-input"
-          autofocus
-        />
-        <div class="flex gap-2">
-          <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-          <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-        </div>
-      </div>
-    `;
-
-    const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-    const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-    const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-    const handleConfirm = () => {
-      const password = passwordInput.value;
-      document.body.removeChild(modal);
-      resolve(password || null);
-    };
-
-    const handleCancel = () => {
-      document.body.removeChild(modal);
-      resolve(null);
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleConfirm();
-    });
-
-    document.body.appendChild(modal);
-  });
-};
-
 export default function TokenCreator() {
   // Wagmi hooks for wallet interaction
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
@@ -294,141 +241,42 @@ export default function TokenCreator() {
 
       let hash: `0x${string}`;
 
-      if (isUsingInternalWallet(connector)) {
-        // For internal wallets, use direct GraphQL call
-        const internalWalletState = internalWalletUtils.getState();
-        if (!internalWalletState.activeWallet) {
-          throw new Error('No internal wallet connected');
-        }
-
-        // Get password from user
-        const password = await promptForPassword();
-        if (!password) {
-          throw new Error('Password required for token creation transaction');
-        }
-
-        // Encode the function call
-        let functionData: `0x${string}`;
-        let gasLimit: string;
-
-        if (activeTokenType === 'standard') {
-          const contractParams = formatStandardTokenParams();
-          functionData = encodeFunctionData({
-            abi: STANDARD_TOKEN_FACTORY_ABI,
-            functionName: 'create',
-            args: [
-              contractParams.name,
-              contractParams.symbol,
-              contractParams.decimals,
-              BigInt(contractParams.totalSupply),
-            ],
-          });
-          gasLimit = '2000000';
-        } else {
-          const contractParams = formatLiquidityGeneratorTokenParams();
-          const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-          functionData = encodeFunctionData({
-            abi: LIQUIDITY_GENERATOR_TOKEN_FACTORY_ABI,
-            functionName: 'create',
-            args: [
-              contractParams.name,
-              contractParams.symbol,
-              BigInt(contractParams.totalSupply),
-              routerAddress,
-              contractParams.charity as `0x${string}`,
-              contractParams.taxFeeBps,
-              contractParams.liquidityFeeBps,
-              contractParams.charityBps,
-            ],
-          });
-          gasLimit = '6500000';
-        }
-
-        // Make GraphQL call to backend
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        const response = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: `
-              mutation SendContractTransaction($input: SendContractTransactionInput!) {
-                sendContractTransaction(input: $input) {
-                  id
-                  hash
-                  status
-                }
-              }
-            `,
-            variables: {
-              input: {
-                walletId: internalWalletState.activeWallet.id,
-                toAddress: factoryAddress,
-                value: creationFee.toString(),
-                data: functionData,
-                password: password,
-                chainId: internalWalletState.activeWallet.chainId,
-                gasLimit: gasLimit
-              }
-            }
-          }),
+      if (activeTokenType === 'standard') {
+        const contractParams = formatStandardTokenParams();
+        hash = await walletClient.writeContract({
+          address: factoryAddress as `0x${string}`,
+          abi: STANDARD_TOKEN_FACTORY_ABI,
+          functionName: 'create',
+          args: [
+            contractParams.name,
+            contractParams.symbol,
+            contractParams.decimals,
+            BigInt(contractParams.totalSupply),
+          ],
+          value: creationFee,
+          gas: BigInt(2000000), // Gas limit for standard token
         });
-
-        const result = await response.json();
-        if (result.errors) {
-          throw new Error(result.errors[0].message);
-        }
-
-        hash = result.data.sendContractTransaction.hash;
       } else {
-        // For external wallets, use the existing walletClient method
-        if (!walletClient) {
-          throw new Error('External wallet not available for transaction signing');
-        }
+        const contractParams = formatLiquidityGeneratorTokenParams();
+        const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
 
-        if (activeTokenType === 'standard') {
-          const contractParams = formatStandardTokenParams();
-          hash = await walletClient.writeContract({
-            address: factoryAddress as `0x${string}`,
-            abi: STANDARD_TOKEN_FACTORY_ABI,
-            functionName: 'create',
-            args: [
-              contractParams.name,
-              contractParams.symbol,
-              contractParams.decimals,
-              BigInt(contractParams.totalSupply),
-            ],
-            value: creationFee,
-            gas: BigInt(2000000), // Gas limit for standard token
-          });
-        } else {
-          const contractParams = formatLiquidityGeneratorTokenParams();
-          const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-
-          hash = await walletClient.writeContract({
-            address: factoryAddress as `0x${string}`,
-            abi: LIQUIDITY_GENERATOR_TOKEN_FACTORY_ABI,
-            functionName: 'create',
-            args: [
-              contractParams.name,
-              contractParams.symbol,
-              BigInt(contractParams.totalSupply),
-              routerAddress, // Use configured router address
-              contractParams.charity as `0x${string}`,
-              contractParams.taxFeeBps,
-              contractParams.liquidityFeeBps,
-              contractParams.charityBps,
-            ],
-            value: creationFee,
-            gas: BigInt(6500000), // Higher gas limit for liquidity generator token
-          });
-        }
+        hash = await walletClient.writeContract({
+          address: factoryAddress as `0x${string}`,
+          abi: LIQUIDITY_GENERATOR_TOKEN_FACTORY_ABI,
+          functionName: 'create',
+          args: [
+            contractParams.name,
+            contractParams.symbol,
+            BigInt(contractParams.totalSupply),
+            routerAddress, // Use configured router address
+            contractParams.charity as `0x${string}`,
+            contractParams.taxFeeBps,
+            contractParams.liquidityFeeBps,
+            contractParams.charityBps,
+          ],
+          value: creationFee,
+          gas: BigInt(6500000), // Higher gas limit for liquidity generator token
+        });
       }
 
       launchpadLogger.debug(`📝 Transaction hash: ${hash}`);

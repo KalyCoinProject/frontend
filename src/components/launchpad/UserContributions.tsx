@@ -64,14 +64,14 @@ export default function UserContributions({
   // Fetch user contribution data on mount
   useEffect(() => {
     if (isConnected && projectData.contractAddress && projectData.type) {
-      fetchUserContribution(projectData.contractAddress, projectData.type)
+      fetchUserContribution(projectData.contractAddress, projectData.type, projectData.isFinalized, projectData.dexVersion)
     }
-  }, [isConnected, projectData.contractAddress, projectData.type, fetchUserContribution])
+  }, [isConnected, projectData.contractAddress, projectData.type, projectData.isFinalized, projectData.dexVersion, fetchUserContribution])
 
   // Handle claim tokens
   const handleClaimTokens = async () => {
     try {
-      await claimTokens(projectData.contractAddress, projectData.type || 'presale')
+      await claimTokens(projectData.contractAddress, projectData.type || 'presale', projectData.dexVersion)
       onRefresh?.()
     } catch (error) {
       launchpadLogger.error('Claim failed:', error)
@@ -81,7 +81,7 @@ export default function UserContributions({
   // Handle claim refund
   const handleClaimRefund = async () => {
     try {
-      await claimRefund(projectData.contractAddress, projectData.type || 'presale')
+      await claimRefund(projectData.contractAddress, projectData.type || 'presale', projectData.dexVersion)
       onRefresh?.()
     } catch (error) {
       launchpadLogger.error('Refund failed:', error)
@@ -135,7 +135,7 @@ export default function UserContributions({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchUserContribution(projectData.contractAddress, projectData.type || 'presale')}
+              onClick={() => fetchUserContribution(projectData.contractAddress, projectData.type || 'presale', projectData.isFinalized, projectData.dexVersion)}
               disabled={isLoading}
               className="border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
             >

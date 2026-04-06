@@ -37,7 +37,8 @@ interface TokenSelectorProps {
   placeholder?: string;
 }
 
-export default function TokenSelector({
+// Internal component that uses wagmi hooks - only rendered after hydration
+function TokenSelectorContent({
   selectedToken,
   onTokenSelect,
   excludeToken,
@@ -49,24 +50,14 @@ export default function TokenSelector({
   const [isLoadingCustomToken, setIsLoadingCustomToken] = useState(false);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
-  // Get current chain ID from wagmi, fallback to KalyChain (3888)
-  let chainId: number = CHAIN_IDS.KALYCHAIN;
-  try {
-    const wagmiChainId = useChainId();
-    if (wagmiChainId) chainId = wagmiChainId;
-  } catch (error) {
-    // Wagmi not available, use default
-  }
+  // Use DEFAULT_CHAIN_ID from contracts config
+  const chainId = CHAIN_IDS.KALYCHAIN_TESTNET; // Use testnet for V3 testing
 
   // Use useTokenLists hook (same as swaps page) for consistent token list
   const { tokens, loading } = useTokenLists({ chainId });
 
-  let publicClient = null;
-  try {
-    publicClient = usePublicClient();
-  } catch (error) {
-    // Wagmi not available
-  }
+  // Get public client for the current chain
+  const publicClient = usePublicClient({ chainId });
 
 
 
@@ -116,7 +107,7 @@ export default function TokenSelector({
         ]);
 
         const customToken: Token = {
-          chainId: CHAIN_IDS.KALYCHAIN,
+          chainId: chainId, // Use dynamic chainId from wagmi
           address: searchQuery,
           decimals: Number(decimals),
           name: name as string,
@@ -300,4 +291,29 @@ export default function TokenSelector({
       </DialogContent>
     </Dialog>
   );
+}
+
+// Hydration-safe wrapper component
+export default function TokenSelector(props: TokenSelectorProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Show placeholder button during SSR
+  if (!mounted) {
+    return (
+      <Button
+        variant="outline"
+        disabled
+        className="w-full justify-between h-12 px-4 bg-slate-800 border-slate-600 text-white"
+      >
+        <span className="text-slate-400">{props.placeholder || "Select token"}</span>
+        <ChevronDown className="h-4 w-4 text-slate-400" />
+      </Button>
+    );
+  }
+
+  return <TokenSelectorContent {...props} />;
 }
