@@ -59,6 +59,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import InternalWalletStatus from '@/components/wallet/InternalWalletStatus';
+import { MigrationBanner } from '@/components/wallet/MigrationBanner';
+import { MigrationWizard } from '@/components/wallet/MigrationWizard';
+import { useEnsureAuth } from '@/components/providers/WalletProvidersClient';
 import './dashboard.css';
 
 // TokenIcon component for dashboard tokens
@@ -278,6 +281,8 @@ export default function DashboardPage() {
   const [exportPrivateKey, setExportPrivateKey] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+  const { ensureAuth } = useEnsureAuth();
   const [creatingWallet, setCreatingWallet] = useState(false);
   const [createWalletError, setCreateWalletError] = useState<string | null>(null);
 
@@ -294,10 +299,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        // Import auth utilities dynamically to avoid SSR issues
+        // Ensure backend auth exists (auto-creates user for Thirdweb wallet users)
+        const authToken = await ensureAuth();
         const { getAuthToken, fetchGraphQLWithAuth, parseAuthError } = await import('@/utils/auth');
 
-        const token = getAuthToken();
+        const token = authToken || getAuthToken();
 
         if (!token) {
           router.push('/login');
@@ -686,6 +692,10 @@ export default function DashboardPage() {
           <>
             {/* Token Expiration Warning */}
             <TokenExpirationWarning className="mb-6" />
+
+            {/* Wallet Migration Banner & Wizard */}
+            <MigrationBanner onStartMigration={() => setShowMigrationWizard(true)} />
+            <MigrationWizard open={showMigrationWizard} onOpenChange={setShowMigrationWizard} />
 
             <div className="mb-6">
               <Tabs defaultValue="wallets" className="w-full">

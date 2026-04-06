@@ -35,6 +35,7 @@ export const useV3Migration = ({
             }
 
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) throw new Error('V3 not available on this chain');
             const migratorAddress = v3Service.getMigratorAddress();
 
             const pairContract = getContract({
@@ -90,6 +91,7 @@ export const useV3Migration = ({
             }
 
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) throw new Error('V3 not available on this chain');
 
             // Construct params
             const params: V3MigrateParams = {
@@ -124,6 +126,7 @@ export const useV3Migration = ({
         if (!publicClient || !chainId) return false;
         try {
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) return false;
             const poolInfo = await v3Service.getV3PoolInfo(token0, token1, fee, publicClient);
             return !!poolInfo;
         } catch (err) {
@@ -139,6 +142,7 @@ export const useV3Migration = ({
             if (!address || !walletClient || !chainId) throw new Error('Wallet not connected');
 
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) throw new Error('V3 not available on this chain');
 
             // Convert price to sqrtPriceX96 format required by V3 pool initialization
             const sqrtPriceX96 = v3Service.calculateSqrtPriceX96(startPrice, token0, token1);

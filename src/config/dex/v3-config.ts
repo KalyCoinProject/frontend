@@ -113,15 +113,15 @@ export const KALYSWAP_V3_MAINNET_CONFIG: V3DexConfig = {
     subgraphUrl: process.env.NEXT_PUBLIC_V3_MAINNET_SUBGRAPH_URL || '',
 };
 
-// Get V3 config for a given chain ID
-export function getV3Config(chainId: number): V3DexConfig {
+// Get V3 config for a given chain ID (returns null for unsupported chains)
+export function getV3Config(chainId: number): V3DexConfig | null {
     switch (chainId) {
         case CHAIN_IDS.KALYCHAIN:
             return KALYSWAP_V3_MAINNET_CONFIG;
         case CHAIN_IDS.KALYCHAIN_TESTNET:
             return KALYSWAP_V3_TESTNET_CONFIG;
         default:
-            throw new Error(`V3 configuration not available for chain ${chainId}`);
+            return null;
     }
 }
 
@@ -129,7 +129,7 @@ export function getV3Config(chainId: number): V3DexConfig {
 export function isV3Available(chainId: number): boolean {
     try {
         const config = getV3Config(chainId);
-        return config.factory !== '' && config.router !== '';
+        return config !== null && config.factory !== '' && config.router !== '';
     } catch {
         return false;
     }

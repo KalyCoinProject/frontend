@@ -36,7 +36,7 @@ interface WhitelistedPool {
 }
 
 export function useFarmingContracts() {
-  const { chainId, signTransaction, walletType } = useWallet()
+  const { chainId, signTransaction } = useWallet()
 
   // Contract addresses for KalyChain
   const LIQUIDITY_POOL_MANAGER_V2_ADDRESS = '0xe83e7ede1358FA87e5039CF8B1cffF383Bc2896A'
@@ -48,61 +48,6 @@ export function useFarmingContracts() {
     return new ethers.providers.JsonRpcProvider('https://rpc.kalychain.io/rpc')
   }, [])
 
-  // Helper function to check if using internal wallet
-  const isUsingInternalWallet = useCallback(() => {
-    return walletType === 'internal'
-  }, [walletType])
-
-  // Helper function to prompt for password (same pattern as SwapInterface)
-  const promptForPassword = (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]';
-      modal.innerHTML = `
-        <div class="bg-stone-900 border border-amber-500/30 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
-          <h3 class="text-lg font-semibold mb-4 text-white">Enter Wallet Password</h3>
-          <p class="text-sm text-gray-300 mb-4">Enter your internal wallet password to authorize this farming transaction.</p>
-          <input
-            type="password"
-            placeholder="Enter your wallet password"
-            class="w-full p-3 border border-slate-600 bg-slate-800 text-white rounded-lg mb-4 password-input focus:outline-none focus:ring-2 focus:ring-amber-500"
-            autofocus
-          />
-          <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg confirm-btn transition-colors">Confirm</button>
-            <button class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg cancel-btn transition-colors">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-      const handleConfirm = () => {
-        const password = passwordInput.value;
-        document.body.removeChild(modal);
-        resolve(password || null);
-      };
-
-      const handleCancel = () => {
-        document.body.removeChild(modal);
-        resolve(null);
-      };
-
-      confirmBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-      passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConfirm();
-        if (e.key === 'Escape') handleCancel();
-      });
-
-      document.body.appendChild(modal);
-      setTimeout(() => {
-        passwordInput.focus();
-      }, 100);
-    });
-  };
 
   const getLiquidityPoolManagerContract = useCallback(() => {
     const provider = getProvider()
@@ -116,83 +61,19 @@ export function useFarmingContracts() {
     return new Contract(TREASURY_VESTER_ADDRESS, treasuryVesterABI, provider)
   }, [getProvider])
 
-  // Helper function to execute contract calls with proper internal wallet handling (same pattern as SwapInterface)
+  // Helper function to execute contract calls via standard signTransaction
   const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi: any[] | string[] = stakingRewardsABI) => {
-    if (isUsingInternalWallet()) {
-      // For internal wallets, use direct GraphQL call like SwapInterface
-      const { internalWalletUtils } = await import('@/connectors/internalWallet');
-      const internalWalletState = internalWalletUtils.getState();
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No internal wallet connected');
-      }
+    const provider = getProvider();
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+    const data = contract.interface.encodeFunctionData(functionName, args);
 
-      // Get password from user
-      const password = await promptForPassword();
-      if (!password) {
-        throw new Error('Password required for transaction signing');
-      }
+    const tx = {
+      to: contractAddress,
+      data,
+      value: value?.toString() || '0'
+    };
 
-      // Encode the function data
-      const provider = getProvider();
-      const contract = new ethers.Contract(contractAddress, abi, provider);
-      const data = contract.interface.encodeFunctionData(functionName, args);
-
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      // Call backend directly like SwapInterface does
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value: value?.toString() || '0',
-              data: data,
-              password: password,
-              chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '800000'
-            }
-          }
-        }),
-      });
-
-      const result = await response.json();
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      return result.data.sendContractTransaction.hash;
-    } else {
-      // For external wallets, use the existing signTransaction method
-      const provider = getProvider();
-      const contract = new ethers.Contract(contractAddress, abi, provider);
-      const data = contract.interface.encodeFunctionData(functionName, args);
-
-      const tx = {
-        to: contractAddress,
-        data,
-        value: value?.toString() || '0'
-      };
-
-      return await signTransaction(tx);
-    }
+    return await signTransaction(tx);
   };
 
   const getWhitelistedPools = useCallback(async (): Promise<WhitelistedPool[]> => {

@@ -23,6 +23,7 @@ export class KalySwapV3Service extends BaseV3Service {
 
     constructor(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
         const config = getV3Config(chainId);
+        if (!config) throw new Error('V3 not available on this chain');
         super(config);
         this.chainId = chainId;
     }
@@ -292,7 +293,11 @@ export class KalySwapV3Service extends BaseV3Service {
 // Export singleton factory with caching by chainId
 const v3ServiceInstances: Map<number, KalySwapV3Service> = new Map();
 
-export function getKalySwapV3Service(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): KalySwapV3Service {
+export function getKalySwapV3Service(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): KalySwapV3Service | null {
+    // V3 is only available on KalyChain mainnet and testnet
+    const config = getV3Config(chainId);
+    if (!config) return null;
+
     if (!v3ServiceInstances.has(chainId)) {
         v3ServiceInstances.set(chainId, new KalySwapV3Service(chainId));
     }

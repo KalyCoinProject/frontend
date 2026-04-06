@@ -68,6 +68,7 @@ export default function V3ManageModal({ isOpen, onClose, position, onUpdate, ini
 
         try {
             const v3Service = getKalySwapV3Service(chainId || CHAIN_IDS.KALYCHAIN);
+            if (!v3Service) throw new Error('V3 not available on this chain');
 
             // Calculate liquidity to remove
             const liquidityAmount = BigInt(position.liquidity.toString());
@@ -133,6 +134,7 @@ export default function V3ManageModal({ isOpen, onClose, position, onUpdate, ini
 
         try {
             const v3Service = getKalySwapV3Service(chainId || CHAIN_IDS.KALYCHAIN);
+            if (!v3Service) throw new Error('V3 not available on this chain');
             const maxUint128 = 340282366920938463463374607431768211455n;
 
             const hash = await v3Service.collectFees({

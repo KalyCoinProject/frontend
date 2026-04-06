@@ -528,7 +528,9 @@ export default function MultichainSwapInterface({
               Swap {dexName && `on ${dexName}`}
             </CardTitle>
             <div className="flex items-center gap-2">
-              <ProtocolVersionToggle size="sm" showLabel={false} />
+              {(chainId === CHAIN_IDS.KALYCHAIN || chainId === CHAIN_IDS.KALYCHAIN_TESTNET) && (
+                <ProtocolVersionToggle size="sm" showLabel={false} />
+              )}
               <Button
                 variant="ghost"
                 size="sm"

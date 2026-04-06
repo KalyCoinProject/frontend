@@ -197,7 +197,8 @@ class TokenListService {
            typeof token.name === 'string' &&
            typeof token.decimals === 'number' &&
            typeof token.chainId === 'number' &&
-           typeof token.logoURI === 'string' &&
+           // logoURI is optional in the Uniswap token list standard
+           (token.logoURI === undefined || typeof token.logoURI === 'string') &&
            token.address.length > 0 &&
            token.symbol.length > 0 &&
            token.name.length > 0 &&

@@ -70,6 +70,7 @@ export default function V3ManageModal({
             setIsDetecting(true)
             try {
                 const config = getV3Config(CHAIN_IDS.KALYCHAIN_TESTNET)
+                if (!config) return
                 const stakerAddress = config.staker as `0x${string}`
                 const positionManagerAddress = config.positionManager as `0x${string}`
 

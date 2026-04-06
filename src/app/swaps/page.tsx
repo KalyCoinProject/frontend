@@ -1080,7 +1080,9 @@ function SwapsPageContent({
                       ) : (
                         <>
                           <span className="font-medium">
-                            {pairPrice > 0 ? formatTokenPrice(pairPrice, baseTokenForFormatting?.symbol || '') : '0.00000000'}
+                            {pairPrice > 0
+                              ? `1 ${swapState.fromToken?.symbol} = ${formatTokenPrice(pairPrice, baseTokenForFormatting?.symbol || '')} ${swapState.toToken?.symbol}`
+                              : '—'}
                           </span>
                           {priceChange24h !== 0 && (
                             <span

@@ -14,12 +14,11 @@ import ErrorDisplay from './ErrorDisplay';
 import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
 import { SwapErrorType } from '@/utils/swapErrors';
 import { useSwapTransactions } from '@/hooks/useSwapTransactions';
-import { internalWalletUtils } from '@/connectors/internalWallet';
 import { useTokenLists } from '@/hooks/useTokenLists';
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient, useConfig, useConnectorClient } from 'wagmi';
-import { parseEther, formatEther, getContract, parseUnits, formatUnits, encodeFunctionData } from 'viem';
+import { parseEther, formatEther, getContract, parseUnits, formatUnits } from 'viem';
 
 // Contract configuration imports
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
@@ -92,16 +91,12 @@ interface SwapState {
 
 export default function SwapInterface({ fromToken: propFromToken, toToken: propToToken, onTokenChange }: SwapInterfaceProps = {}) {
   // Wagmi hooks for wallet interaction
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // Check if user is using internal wallet and if it's on the correct chain
-  const isUsingInternalWallet = () => connector?.id === 'kalyswap-internal';
-  const internalWalletState = isUsingInternalWallet() ? internalWalletUtils.getState() : null;
-
-  // Determine active chain ID (Internal Wallet > External Wallet > Default)
-  const activeChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+  // Determine active chain ID (Connected Wallet > Default)
+  const activeChainId = (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
 
   // Get dynamic token list based on active chain
   const { tokens: availableTokens } = useTokenLists({ chainId: activeChainId });
@@ -147,9 +142,9 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   const [showSettings, setShowSettings] = useState(false);
   const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'complete'>('idle');
 
-  const isWrongChain = isUsingInternalWallet() &&
-    internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN &&
-    internalWalletState?.activeWallet?.chainId !== CHAIN_IDS.KALYCHAIN_TESTNET;
+  const isWrongChain = isConnected &&
+    publicClient?.chain?.id !== CHAIN_IDS.KALYCHAIN &&
+    publicClient?.chain?.id !== CHAIN_IDS.KALYCHAIN_TESTNET;
   const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
 
   // Enhanced error handling
@@ -186,157 +181,23 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
 
   // Get wallet ID for transaction tracking
   const getWalletId = () => {
-    // Check if using internal wallet
-    const internalWalletState = internalWalletUtils.getState();
-    if (internalWalletState.isConnected && internalWalletState.activeWallet) {
-      return internalWalletState.activeWallet.id;
-    }
-
-    // For external wallets, use a default ID or create one based on address
-    return `external-${address?.slice(0, 10)}` || 'external-default';
+    return `wallet-${address?.slice(0, 10)}` || 'wallet-default';
   };
 
 
 
-  // Helper function to prompt for password (similar to dashboard)
-  const promptForPassword = (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      // Create password prompt modal
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-          <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this transaction.</p>
-          <input
-            type="password"
-            placeholder="Enter your wallet password"
-            class="w-full p-3 border rounded-lg mb-4 password-input"
-            autofocus
-          />
-          <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg confirm-btn">Confirm</button>
-            <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-      const handleConfirm = () => {
-        const password = passwordInput.value;
-        document.body.removeChild(modal);
-        resolve(password || null);
-      };
-
-      const handleCancel = () => {
-        document.body.removeChild(modal);
-        resolve(null);
-      };
-
-      confirmBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-      passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConfirm();
-      });
-
-      document.body.appendChild(modal);
-    });
-  };
-
-  // Helper function to execute contract calls with proper internal wallet handling
+  // Helper function to execute contract calls via standard Wagmi writeContract
   const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi = ROUTER_ABI) => {
-    if (isUsingInternalWallet()) {
-      // For internal wallets, use direct GraphQL call like dashboard
-      const internalWalletState = internalWalletUtils.getState();
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No internal wallet connected');
-      }
+    if (!walletClient) throw new Error('Wallet client not available');
 
-      // Ensure we're using a KalyChain wallet for swaps
-      // Ensure we're using a KalyChain wallet for swaps
-      if (internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN &&
-        internalWalletState.activeWallet.chainId !== CHAIN_IDS.KALYCHAIN_TESTNET) {
-        throw new Error('Swaps are only available on KalyChain. Please switch to a KalyChain wallet.');
-      }
-
-      // Get password from user
-      const password = await promptForPassword();
-      if (!password) {
-        throw new Error('Password required for transaction signing');
-      }
-
-      // Encode the function data
-      const data = encodeFunctionData({
-        abi,
-        functionName,
-        args
-      });
-
-      logger.debug('🔐 Sending contract transaction via GraphQL:', {
-        to: contractAddress,
-        data: data.slice(0, 10) + '...',
-        value: value?.toString() || '0',
-      });
-
-      // Get auth token
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      // Call backend directly like dashboard does
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value: value?.toString() || '0',
-              data: data,
-              password: password,
-              chainId: CHAIN_IDS.KALYCHAIN, // Force KalyChain for swaps
-              gasLimit: '300000'
-            }
-          }
-        }),
-      });
-
-      const result = await response.json();
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      return result.data.sendContractTransaction.hash as `0x${string}`;
-    } else {
-      // For external wallets, use the standard writeContract method
-      if (!walletClient) throw new Error('Wallet client not available');
-
-      return await walletClient.writeContract({
-        address: contractAddress as `0x${string}`,
-        abi,
-        functionName,
-        args,
-        value,
-        gas: BigInt(300000),
-      });
-    }
+    return await walletClient.writeContract({
+      address: contractAddress as `0x${string}`,
+      abi,
+      functionName,
+      args,
+      value,
+      gas: BigInt(300000),
+    });
   };
   const [priceImpact, setPriceImpact] = useState<string | null>(null);
 
@@ -375,10 +236,11 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         });
 
         // Use the current chain ID or fallback to default
-        const currentChainId = internalWalletState?.activeWallet?.chainId || CHAIN_IDS.KALYCHAIN;
+        const currentChainId = (isConnected ? publicClient?.chain?.id : undefined) || CHAIN_IDS.KALYCHAIN;
         logger.debug('Using Chain ID for V3 Service:', currentChainId);
 
         const v3Service = getKalySwapV3Service(currentChainId);
+        if (!v3Service) throw new Error('V3 not available on this chain');
         const quoteResult = await v3Service.getQuote(fromToken, toToken, inputAmount, publicClient);
 
         logger.debug('✅ V3 Quote received', {
@@ -399,7 +261,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           protocol: 'V2'
         });
 
-        const currentChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+        const currentChainId = (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
 
         const quoteResult = await DexService.getQuote(
           currentChainId,
@@ -492,8 +354,9 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     if (isV3 && isV3Supported) {
       try {
         // Use the current chain ID or fallback to default
-        const currentChainId = internalWalletState?.activeWallet?.chainId || CHAIN_IDS.KALYCHAIN;
+        const currentChainId = (isConnected ? publicClient?.chain?.id : undefined) || CHAIN_IDS.KALYCHAIN;
         const v3Service = getKalySwapV3Service(currentChainId);
+        if (!v3Service) return { priceImpact: '0', severity: 'low' as const, warning: null };
         const quote = await v3Service.getQuote(fromToken, toToken, inputAmount, publicClient);
 
         // Ensure priceImpact is defined and valid before processing
@@ -608,7 +471,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         throw new Error('Tokens not selected');
       }
 
-      const currentChainId = internalWalletState?.activeWallet?.chainId || (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+      const currentChainId = (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
       const routerAddress = getContractAddress('ROUTER', currentChainId);
       const amountIn = parseUnits(swapState.fromAmount, swapState.fromToken.decimals);
       const amountOutMin = parseUnits(swapState.toAmount, swapState.toToken.decimals);
@@ -669,23 +532,12 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           // wKLC → KLC: First approve, then call withdraw()
           logger.debug('📝 Approving wKLC for unwrap...');
 
-          let approveHash: `0x${string}`;
-          if (isUsingInternalWallet()) {
-            approveHash = await executeContractCall(
-              wklcAddress,
-              'approve',
-              [wklcAddress, amountIn],
-              BigInt(0),
-              WKLC_ABI
-            );
-          } else {
-            const wklcContract = getContract({
-              address: wklcAddress as `0x${string}`,
-              abi: WKLC_ABI,
-              client: walletClient,
-            });
-            approveHash = await wklcContract.write.approve([wklcAddress, amountIn]);
-          }
+          const wklcContract = getContract({
+            address: wklcAddress as `0x${string}`,
+            abi: WKLC_ABI,
+            client: walletClient,
+          });
+          const approveHash = await wklcContract.write.approve([wklcAddress, amountIn]);
 
           logger.debug(`📝 wKLC approval hash: ${approveHash}`);
           await publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -714,31 +566,20 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           });
 
           const v3Service = getKalySwapV3Service(currentChainId);
+          if (!v3Service) throw new Error('V3 not available on this chain');
           const v3RouterAddress = v3Service.getRouterAddress();
 
           // Step 1: Approve token if not native
           if (swapState.fromToken.isNative !== true) {
             logger.debug('📝 V3: Approving token...');
 
-            let approveHash: `0x${string}`;
+            const tokenContract = getContract({
+              address: swapState.fromToken.address as `0x${string}`,
+              abi: ERC20_ABI,
+              client: walletClient,
+            });
 
-            if (isUsingInternalWallet()) {
-              approveHash = await executeContractCall(
-                swapState.fromToken.address,
-                'approve',
-                [v3RouterAddress, amountIn],
-                BigInt(0),
-                ERC20_ABI
-              );
-            } else {
-              const tokenContract = getContract({
-                address: swapState.fromToken.address as `0x${string}`,
-                abi: ERC20_ABI,
-                client: walletClient,
-              });
-
-              approveHash = await tokenContract.write.approve([v3RouterAddress, amountIn]);
-            }
+            const approveHash = await tokenContract.write.approve([v3RouterAddress, amountIn]);
 
             logger.debug(`📝 V3 Approval transaction hash: ${approveHash}`);
             await publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -777,27 +618,13 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
           if (swapState.fromToken.isNative !== true) {
             logger.debug('📝 V2: Approving token...');
 
-            let approveHash: `0x${string}`;
+            const tokenContract = getContract({
+              address: swapState.fromToken.address as `0x${string}`,
+              abi: ERC20_ABI,
+              client: walletClient,
+            });
 
-            if (isUsingInternalWallet()) {
-              // For internal wallets, use our helper function with ERC20 ABI
-              approveHash = await executeContractCall(
-                swapState.fromToken.address,
-                'approve',
-                [routerAddress, amountIn],
-                BigInt(0),
-                ERC20_ABI
-              );
-            } else {
-              // For external wallets, use the standard approach
-              const tokenContract = getContract({
-                address: swapState.fromToken.address as `0x${string}`,
-                abi: ERC20_ABI,
-                client: walletClient,
-              });
-
-              approveHash = await tokenContract.write.approve([routerAddress, amountIn]);
-            }
+            const approveHash = await tokenContract.write.approve([routerAddress, amountIn]);
 
             logger.debug(`📝 Approval transaction hash: ${approveHash}`);
             await publicClient.waitForTransactionReceipt({ hash: approveHash });

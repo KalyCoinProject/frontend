@@ -22,6 +22,7 @@ export function useV3Positions() {
         setError(null);
         try {
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) return;
             const userPositions = await v3Service.getV3Positions(address, publicClient);
 
             // Filter out invalid positions if any

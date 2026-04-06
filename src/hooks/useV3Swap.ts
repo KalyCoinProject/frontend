@@ -40,7 +40,7 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Get V3 service instance
+    // Get V3 service instance (null if V3 not supported on this chain)
     const service = useMemo(() => getKalySwapV3Service(chainId), [chainId]);
 
     /**
@@ -51,14 +51,12 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
         tokenOut: Token
     ): Promise<number> => {
         try {
-            if (!publicClient) {
-                throw new Error('Public client not available');
-            }
+            if (!service) throw new Error('V3 not available on this chain');
+            if (!publicClient) throw new Error('Public client not available');
 
             return await service.getOptimalFeeTier(tokenIn, tokenOut, publicClient);
         } catch (err: any) {
             logger.error('Error getting best fee tier:', err);
-            // Default to 0.3% fee tier
             return 3000;
         }
     }, [service, publicClient]);
@@ -75,9 +73,8 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
         try {
             setError(null);
 
-            if (!publicClient) {
-                throw new Error('Public client not available');
-            }
+            if (!service) throw new Error('V3 not available on this chain');
+            if (!publicClient) throw new Error('Public client not available');
 
             // If no fee specified, find the best one
             const feeTier = fee || await getBestFeeTier(tokenIn, tokenOut);
@@ -116,9 +113,8 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
         try {
             setError(null);
 
-            if (!publicClient) {
-                throw new Error('Public client not available');
-            }
+            if (!service) throw new Error('V3 not available on this chain');
+            if (!publicClient) throw new Error('Public client not available');
 
             // Use the service's getQuote which tries all fee tiers
             const quote = await service.getQuote(tokenIn, tokenOut, amountIn, publicClient);
@@ -144,7 +140,7 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
         amount: string
     ): Promise<boolean> => {
         try {
-            if (!publicClient || !walletClient) {
+            if (!service || !publicClient || !walletClient) {
                 return false;
             }
 
@@ -188,9 +184,8 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
         amount?: string
     ): Promise<string> => {
         try {
-            if (!walletClient) {
-                throw new Error('Wallet client not available');
-            }
+            if (!service) throw new Error('V3 not available on this chain');
+            if (!walletClient) throw new Error('Wallet client not available');
 
             // Native tokens don't need approval
             if (token.isNative) {
@@ -240,13 +235,9 @@ export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3S
             setIsLoading(true);
             setError(null);
 
-            if (!walletClient) {
-                throw new Error('Wallet client not available');
-            }
-
-            if (!publicClient) {
-                throw new Error('Public client not available');
-            }
+            if (!service) throw new Error('V3 not available on this chain');
+            if (!walletClient) throw new Error('Wallet client not available');
+            if (!publicClient) throw new Error('Public client not available');
 
             logger.debug('🔄 V3 Swap starting:', {
                 tokenIn: params.tokenIn.symbol,

@@ -139,6 +139,8 @@ export function useChartData({ tokenA, tokenB, enabled = true, refetchInterval, 
     enabled: enabled && hasValidTokens,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
   });
 
   // Wrap refetch to match MouseEventHandler signature
@@ -289,6 +291,7 @@ async function fetchV3SubgraphData(
   }
 
   const v3Config = getV3Config(chainId);
+  if (!v3Config) throw new Error('V3 not available on this chain');
   const hourData = await getV3PoolHourData(poolAddress, v3Config.subgraphUrl, 168, 0);
 
   if (!hourData || hourData.length === 0) {

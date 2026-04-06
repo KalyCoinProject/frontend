@@ -64,6 +64,7 @@ export const useV3AddLiquidity = ({
             }
 
             const v3Service = getKalySwapV3Service(chainId);
+            if (!v3Service) throw new Error('V3 not available on this chain');
             const amount0Min = calculateMinAmount(amount0Desired, slippageTolerance, token0.decimals);
             const amount1Min = calculateMinAmount(amount1Desired, slippageTolerance, token1.decimals);
 

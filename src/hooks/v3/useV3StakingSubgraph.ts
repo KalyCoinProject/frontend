@@ -131,7 +131,8 @@ export function useV3StakingSubgraph(chainId: number = CHAIN_IDS.KALYCHAIN_TESTN
 
     let subgraphUrl: string;
     try {
-        subgraphUrl = getV3Config(chainId).subgraphUrl;
+        const config = getV3Config(chainId);
+        subgraphUrl = config ? config.subgraphUrl : '';
     } catch {
         subgraphUrl = '';
     }

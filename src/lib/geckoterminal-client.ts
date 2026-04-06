@@ -49,11 +49,16 @@ async function rateLimitedFetch(url: string): Promise<any> {
   lastApiCall = Date.now();
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
-      }
+      },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       // 404 means pool not found - this is expected for many token pairs
@@ -74,9 +79,14 @@ async function rateLimitedFetch(url: string): Promise<any> {
 
     return data;
   } catch (error) {
-    // Only log non-404 errors as actual errors
-    if (error instanceof Error && !error.message.includes('404')) {
-      subgraphLogger.error('❌ GeckoTerminal API error:', error);
+    // Only log unexpected errors — network errors and 404s are expected
+    if (error instanceof Error) {
+      const msg = error.message;
+      if (!msg.includes('404') && !msg.includes('NetworkError') && !msg.includes('abort')) {
+        subgraphLogger.error('❌ GeckoTerminal API error:', error);
+      } else {
+        subgraphLogger.debug('⚠️ GeckoTerminal request failed:', msg);
+      }
     }
     throw error;
   }

@@ -27,7 +27,9 @@ export class V3StakingService {
     private positionManagerABI: any[];
 
     constructor(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
-        this.config = getV3Config(chainId);
+        const config = getV3Config(chainId);
+        if (!config) throw new Error('V3 not available on this chain');
+        this.config = config;
         this.stakerAddress = this.config.staker;
         this.positionManagerAddress = this.config.positionManager;
         this.stakerABI = V3StakerABI;

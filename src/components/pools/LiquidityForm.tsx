@@ -103,6 +103,7 @@ export default function LiquidityForm({
         try {
           if (isV3) {
             const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+            if (!v3Service) return;
             if (!approvedA) {
               approvedA = await v3Service.checkApproval(tokenA, address, amountA || '0', publicClient);
             }
@@ -134,6 +135,7 @@ export default function LiquidityForm({
 
       if (isV3) {
         const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+        if (!v3Service) throw new Error('V3 not available on this chain');
         if (!walletClient) throw new Error('Wallet not connected');
         // Approve amountA or max uint256
         const amountToApprove = amountA && parseFloat(amountA) > 0 ? amountA : '115792089237316195423570985008687907853269984665640564039457';
@@ -157,6 +159,7 @@ export default function LiquidityForm({
 
       if (isV3) {
         const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+        if (!v3Service) throw new Error('V3 not available on this chain');
         if (!walletClient) throw new Error('Wallet not connected');
         // Approve amountB or max uint256
         const amountToApprove = amountB && parseFloat(amountB) > 0 ? amountB : '115792089237316195423570985008687907853269984665640564039457';
@@ -180,7 +183,7 @@ export default function LiquidityForm({
           // V3 Logic
           if (isV3) {
             const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
-            if (!publicClient) return;
+            if (!v3Service || !publicClient) return;
 
             // Check if V3 pool exists
             const poolInfo = await v3Service.getV3PoolInfo(tokenA, tokenB, V3_DEFAULT_FEE_TIER, publicClient);
@@ -253,6 +256,7 @@ export default function LiquidityForm({
         // V3 Logic
         if (isV3) {
           const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+          if (!v3Service) return;
           // Get all positions
           const positions = await v3Service.getV3Positions(address!, publicClient);
           // Filter for current pair
@@ -307,6 +311,7 @@ export default function LiquidityForm({
         // V3 Logic
         if (isV3) {
           const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+          if (!v3Service) return;
           if (publicClient) {
             const { amountB: calculatedAmountB } = await v3Service.calculateOptimalLiquidityAmounts(
               tokenA, tokenB, amountA, publicClient
@@ -364,6 +369,7 @@ export default function LiquidityForm({
       if (isV3) {
         // V3 Logic
         const v3Service = getKalySwapV3Service(isConnected ? chainId : undefined);
+        if (!v3Service) throw new Error('V3 not available on this chain');
 
         if (!walletClient) throw new Error('Wallet not connected');
 

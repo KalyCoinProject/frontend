@@ -30,7 +30,7 @@ const TOKEN_B: Token = {
 
 describe('KalySwap V3 Integration (Testnet)', () => {
     const chainId = CHAIN_IDS.KALYCHAIN_TESTNET;
-    const service = getKalySwapV3Service(chainId);
+    const service = getKalySwapV3Service(chainId)!;
 
     // Create actual client for testnet
     const publicClient = createPublicClient({

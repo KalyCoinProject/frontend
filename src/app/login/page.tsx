@@ -12,6 +12,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { AlertCircle } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
+import { useConnect } from 'thirdweb/react';
+import { kalyswapInAppWallet } from '@/config/thirdweb';
+import { thirdwebClient } from '@/config/thirdweb';
 
 // Login form data
 interface LoginFormData {
@@ -35,6 +38,7 @@ const LOGIN_MUTATION = `
 
 export default function LoginPage() {
   const router = useRouter();
+  const { connect } = useConnect();
   const [formData, setFormData] = useState<LoginFormData>({
     username: '',
     password: '',
@@ -79,6 +83,22 @@ export default function LoginPage() {
 
       // Store token using auth utility
       setAuthToken(token);
+
+      // Auto-create Thirdweb in-app wallet for this user via custom auth endpoint
+      // Thirdweb will call our backend /api/auth/thirdweb with this JWT to verify identity
+      try {
+        await connect(async () => {
+          await kalyswapInAppWallet.connect({
+            client: thirdwebClient,
+            strategy: 'auth_endpoint',
+            payload: token,
+          });
+          return kalyswapInAppWallet;
+        });
+      } catch (walletErr) {
+        // Non-blocking — user can still connect wallet manually later
+        logger.debug('Auto wallet creation skipped:', walletErr);
+      }
 
       // Redirect to dashboard
       router.push('/dashboard');

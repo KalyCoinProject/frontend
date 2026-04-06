@@ -37,16 +37,17 @@ import {
 // Contract configuration imports
 import {
   getContractAddress,
+  getContracts,
   DEFAULT_CHAIN_ID,
   CONTRACT_FEES,
   BASE_TOKENS
 } from '@/config/contracts';
-import { PRESALE_FACTORY_ABI, PRESALE_ABI, ERC20_ABI } from '@/config/abis';
+import { PRESALE_FACTORY_ABI, PRESALE_ABI, PRESALE_V3_FACTORY_ABI, PRESALE_V3_ABI, ERC20_ABI } from '@/config/abis';
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useEnsureAuth } from '@/components/providers/WalletProvidersClient';
 import { parseUnits, formatUnits, getContract, parseEther, encodeFunctionData } from 'viem';
-import { internalWalletUtils } from '@/connectors/internalWallet';
 
 // Auth hook for checking login status
 import { useAuth } from '@/hooks/useAuth';
@@ -126,141 +127,18 @@ interface LPLockSettings {
   recipient: string;           // LP token recipient address
 }
 
-// Helper function to check if using internal wallet
-const isUsingInternalWallet = (connector: any) => {
-  return connector?.id === 'kalyswap-internal';
-};
 
-// Helper function to prompt for password
-const promptForPassword = (): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-        <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this presale transaction.</p>
-        <input
-          type="password"
-          placeholder="Enter your wallet password"
-          class="w-full p-3 border rounded-lg mb-4 password-input"
-          autofocus
-        />
-        <div class="flex gap-2">
-          <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-          <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-        </div>
-      </div>
-    `;
+interface PresaleCreatorProps {
+  dexVersion?: 'v2' | 'v3';
+}
 
-    const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-    const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-    const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-    const handleConfirm = () => {
-      const password = passwordInput.value;
-      document.body.removeChild(modal);
-      resolve(password || null);
-    };
-
-    const handleCancel = () => {
-      document.body.removeChild(modal);
-      resolve(null);
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleConfirm();
-    });
-
-    document.body.appendChild(modal);
-  });
-};
-
-// Helper function for internal wallet contract calls
-const executeContractCall = async (
-  connector: any,
-  contractAddress: string,
-  abi: any,
-  functionName: string,
-  args: any[],
-  value: string = '0',
-  gasLimit: string = '200000'
-): Promise<`0x${string}`> => {
-  if (isUsingInternalWallet(connector)) {
-    // For internal wallets, use direct GraphQL call
-    const internalWalletState = internalWalletUtils.getState();
-    if (!internalWalletState.activeWallet) {
-      throw new Error('No internal wallet connected');
-    }
-
-    // Get password from user
-    const password = await promptForPassword();
-    if (!password) {
-      throw new Error('Password required for transaction');
-    }
-
-    // Encode the function call
-    const functionData = encodeFunctionData({
-      abi,
-      functionName,
-      args,
-    });
-
-    // Make GraphQL call to backend
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('Authentication required');
-    }
-
-    const response = await fetch('/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: `
-          mutation SendContractTransaction($input: SendContractTransactionInput!) {
-            sendContractTransaction(input: $input) {
-              id
-              hash
-              status
-            }
-          }
-        `,
-        variables: {
-          input: {
-            walletId: internalWalletState.activeWallet.id,
-            toAddress: contractAddress,
-            value,
-            data: functionData,
-            password: password,
-            chainId: internalWalletState.activeWallet.chainId,
-            gasLimit
-          }
-        }
-      }),
-    });
-
-    const result = await response.json();
-    if (result.errors) {
-      throw new Error(result.errors[0].message);
-    }
-
-    return result.data.sendContractTransaction.hash;
-  } else {
-    throw new Error('This function should only be called for internal wallets');
-  }
-};
-
-export default function PresaleCreator() {
+export default function PresaleCreator({ dexVersion = 'v2' }: PresaleCreatorProps) {
   // Auth hook for checking login status
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const { ensureAuth } = useEnsureAuth();
 
   // Wagmi hooks for wallet interaction
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
@@ -305,6 +183,7 @@ export default function PresaleCreator() {
   const [tokenSymbol, setTokenSymbol] = useState<string>('');
   const [requiredTokens, setRequiredTokens] = useState<bigint | null>(null);
   const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'creating' | 'setting-router' | 'setting-lplock' | 'saving' | 'complete'>('idle');
+  const [v3FeeTier, setV3FeeTier] = useState<number>(3000); // Default 0.3% fee tier
 
   // Load draft data from localStorage on component mount
   useEffect(() => {
@@ -395,85 +274,15 @@ export default function PresaleCreator() {
   // Helper function to approve tokens
   const approveTokens = async (tokenAddress: string, spenderAddress: string, amount: bigint) => {
     if (!address) throw new Error('Wallet not connected');
+    if (!walletClient) throw new Error('Wallet client not available');
 
     try {
-      let hash: `0x${string}`;
-
-      if (isUsingInternalWallet(connector)) {
-        // For internal wallets, use direct GraphQL call
-        const internalWalletState = internalWalletUtils.getState();
-        if (!internalWalletState.activeWallet) {
-          throw new Error('No internal wallet connected');
-        }
-
-        // Get password from user
-        const password = await promptForPassword();
-        if (!password) {
-          throw new Error('Password required for token approval transaction');
-        }
-
-        // Encode the approve function call
-        const functionData = encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [spenderAddress, amount],
-        });
-
-        // Make GraphQL call to backend
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        const response = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: `
-              mutation SendContractTransaction($input: SendContractTransactionInput!) {
-                sendContractTransaction(input: $input) {
-                  id
-                  hash
-                  status
-                }
-              }
-            `,
-            variables: {
-              input: {
-                walletId: internalWalletState.activeWallet.id,
-                toAddress: tokenAddress,
-                value: '0',
-                data: functionData,
-                password: password,
-                chainId: internalWalletState.activeWallet.chainId,
-                gasLimit: '100000'
-              }
-            }
-          }),
-        });
-
-        const result = await response.json();
-        if (result.errors) {
-          throw new Error(result.errors[0].message);
-        }
-
-        hash = result.data.sendContractTransaction.hash;
-      } else {
-        // For external wallets, use the existing walletClient method
-        if (!walletClient) {
-          throw new Error('External wallet not available for transaction signing');
-        }
-
-        hash = await walletClient.writeContract({
-          address: tokenAddress as `0x${string}`,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [spenderAddress, amount],
-        });
-      }
+      const hash = await walletClient.writeContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [spenderAddress, amount],
+      });
 
       // Wait for transaction confirmation
       const receipt = await publicClient!.waitForTransactionReceipt({ hash });
@@ -500,10 +309,10 @@ export default function PresaleCreator() {
     try {
       setIsSavingToDatabase(true);
 
-      // Authentication is required for creating presales
-      const token = localStorage.getItem('auth_token');
+      // Ensure backend auth (auto-creates user for Thirdweb wallet users)
+      const token = await ensureAuth();
       if (!token) {
-        throw new Error('Authentication required to save project');
+        throw new Error('Please connect a wallet to save your project');
       }
 
       const projectInput = {
@@ -536,7 +345,10 @@ export default function PresaleCreator() {
         // Required Blockchain Data
         contractAddress,
         transactionHash,
-        blockNumber
+        blockNumber,
+
+        // DEX version
+        dexVersion,
       };
 
       const response = await fetch('/api/graphql', {
@@ -767,7 +579,7 @@ export default function PresaleCreator() {
       try {
         const gasEstimate = await publicClient.estimateContractGas({
           address: factoryAddress as `0x${string}`,
-          abi: PRESALE_FACTORY_ABI,
+          abi: getFactoryABI(),
           functionName: 'create',
           args: [
             contractParams.saleToken,
@@ -792,105 +604,28 @@ export default function PresaleCreator() {
         gasLimit = BigInt(3500000); // Fallback gas limit
       }
 
-      let hash: `0x${string}`;
-
-      if (isUsingInternalWallet(connector)) {
-        // For internal wallets, use direct GraphQL call
-        const internalWalletState = internalWalletUtils.getState();
-        if (!internalWalletState.activeWallet) {
-          throw new Error('No internal wallet connected');
-        }
-
-        // Get password from user
-        const password = await promptForPassword();
-        if (!password) {
-          throw new Error('Password required for presale creation transaction');
-        }
-
-        // Encode the create function call
-        const functionData = encodeFunctionData({
-          abi: PRESALE_FACTORY_ABI,
-          functionName: 'create',
-          args: [
-            contractParams.saleToken,
-            contractParams.baseToken,
-            [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
-            [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
-            parseEther(contractParams.softCap),
-            parseEther(contractParams.hardCap),
-            BigInt(contractParams.liquidityPercent),
-            BigInt(contractParams.presaleStart),
-            BigInt(contractParams.presaleEnd),
-          ],
-        });
-
-        // Make GraphQL call to backend
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        const response = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: `
-              mutation SendContractTransaction($input: SendContractTransactionInput!) {
-                sendContractTransaction(input: $input) {
-                  id
-                  hash
-                  status
-                }
-              }
-            `,
-            variables: {
-              input: {
-                walletId: internalWalletState.activeWallet.id,
-                toAddress: factoryAddress,
-                value: creationFee.toString(),
-                data: functionData,
-                password: password,
-                chainId: internalWalletState.activeWallet.chainId,
-                gasLimit: gasLimit.toString()
-              }
-            }
-          }),
-        });
-
-        const result = await response.json();
-        if (result.errors) {
-          throw new Error(result.errors[0].message);
-        }
-
-        hash = result.data.sendContractTransaction.hash;
-      } else {
-        // For external wallets, use the existing walletClient method
-        if (!walletClient) {
-          throw new Error('External wallet not available for transaction signing');
-        }
-
-        hash = await walletClient.writeContract({
-          address: factoryAddress as `0x${string}`,
-          abi: PRESALE_FACTORY_ABI,
-          functionName: 'create',
-          args: [
-            contractParams.saleToken,
-            contractParams.baseToken,
-            [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
-            [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
-            parseEther(contractParams.softCap),
-            parseEther(contractParams.hardCap),
-            BigInt(contractParams.liquidityPercent),
-            BigInt(contractParams.presaleStart),
-            BigInt(contractParams.presaleEnd),
-          ],
-          value: creationFee,
-          gas: gasLimit,
-        });
+      if (!walletClient) {
+        throw new Error('Wallet client not available');
       }
+
+      const hash = await walletClient.writeContract({
+        address: factoryAddress as `0x${string}`,
+        abi: getFactoryABI(),
+        functionName: 'create',
+        args: [
+          contractParams.saleToken,
+          contractParams.baseToken,
+          [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
+          [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
+          parseEther(contractParams.softCap),
+          parseEther(contractParams.hardCap),
+          BigInt(contractParams.liquidityPercent),
+          BigInt(contractParams.presaleStart),
+          BigInt(contractParams.presaleEnd),
+        ],
+        value: creationFee,
+        gas: gasLimit,
+      });
 
       launchpadLogger.debug(`📝 Transaction hash: ${hash}`);
       launchpadLogger.debug('⏳ Waiting for transaction confirmation...');
@@ -943,45 +678,62 @@ export default function PresaleCreator() {
       launchpadLogger.debug(`🎉 Presale created at: ${presaleAddress}`);
       setCreatedPresale(presaleAddress);
 
-      // Step 6: Set router address
+      // Step 6: Set router (V2) or position manager (V3)
       setCurrentStep('setting-router');
       setIsSettingRouter(true);
 
-      launchpadLogger.debug('🔧 Setting router address...');
-      const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
+      if (dexVersion === 'v3') {
+        // V3: Set position manager, fee tier, and liquidity helper
+        launchpadLogger.debug('🔧 Setting V3 position manager...');
+        const contracts = getContracts(DEFAULT_CHAIN_ID) as typeof import('@/config/contracts').TESTNET_CONTRACTS;
 
-      try {
-        let setRouterHash: `0x${string}`;
-
-        if (isUsingInternalWallet(connector)) {
-          setRouterHash = await executeContractCall(
-            connector,
-            presaleAddress,
-            PRESALE_ABI,
-            'setRouter',
-            [routerAddress],
-            '0',
-            '100000'
-          );
-        } else {
+        try {
           if (!walletClient) {
-            throw new Error('External wallet not available for transaction signing');
+            throw new Error('Wallet client not available');
           }
 
-          setRouterHash = await walletClient.writeContract({
+          const setPositionManagerHash = await walletClient.writeContract({
+            address: presaleAddress as `0x${string}`,
+            abi: PRESALE_V3_ABI,
+            functionName: 'setPositionManager',
+            args: [
+              contracts.V3_NONFUNGIBLE_POSITION_MANAGER as `0x${string}`,
+              v3FeeTier,
+              contracts.V3_LIQUIDITY_HELPER as `0x${string}`,
+            ],
+            gas: BigInt(500000),
+          });
+
+          await publicClient.waitForTransactionReceipt({ hash: setPositionManagerHash });
+          launchpadLogger.debug('✅ V3 position manager set successfully');
+        } catch (error) {
+          launchpadLogger.warn('⚠️ Failed to set V3 position manager:', error);
+          // Don't fail the entire process for position manager setup
+        }
+      } else {
+        // V2: Set router address
+        launchpadLogger.debug('🔧 Setting router address...');
+        const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
+
+        try {
+          if (!walletClient) {
+            throw new Error('Wallet client not available');
+          }
+
+          const setRouterHash = await walletClient.writeContract({
             address: presaleAddress as `0x${string}`,
             abi: PRESALE_ABI,
             functionName: 'setRouter',
             args: [routerAddress],
             gas: BigInt(100000),
           });
-        }
 
-        await publicClient.waitForTransactionReceipt({ hash: setRouterHash });
-        launchpadLogger.debug('✅ Router address set successfully');
-      } catch (error) {
-        launchpadLogger.warn('⚠️ Failed to set router address:', error);
-        // Don't fail the entire process for router setup
+          await publicClient.waitForTransactionReceipt({ hash: setRouterHash });
+          launchpadLogger.debug('✅ Router address set successfully');
+        } catch (error) {
+          launchpadLogger.warn('⚠️ Failed to set router address:', error);
+          // Don't fail the entire process for router setup
+        }
       }
 
       setIsSettingRouter(false);
@@ -994,31 +746,17 @@ export default function PresaleCreator() {
       const lpLockSettings = formatLPLockSettings();
 
       try {
-        let setLockHash: `0x${string}`;
-
-        if (isUsingInternalWallet(connector)) {
-          setLockHash = await executeContractCall(
-            connector,
-            presaleAddress,
-            PRESALE_ABI,
-            'setLPLockSettings',
-            [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
-            '0',
-            '200000'
-          );
-        } else {
-          if (!walletClient) {
-            throw new Error('External wallet not available for transaction signing');
-          }
-
-          setLockHash = await walletClient.writeContract({
-            address: presaleAddress as `0x${string}`,
-            abi: PRESALE_ABI,
-            functionName: 'setLPLockSettings',
-            args: [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
-            gas: BigInt(200000),
-          });
+        if (!walletClient) {
+          throw new Error('Wallet client not available');
         }
+
+        const setLockHash = await walletClient.writeContract({
+          address: presaleAddress as `0x${string}`,
+          abi: getPresaleABI(),
+          functionName: 'setLPLockSettings',
+          args: [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
+          gas: BigInt(200000),
+        });
 
         await publicClient.waitForTransactionReceipt({ hash: setLockHash });
         launchpadLogger.debug(`✅ LP lock settings configured: ${lpLockSettings.lockDuration} seconds, recipient: ${lpLockSettings.recipient}`);
@@ -1089,7 +827,17 @@ export default function PresaleCreator() {
   };
 
   const getPresaleFactoryAddress = () => {
-    return getContractAddress('PRESALE_FACTORY', DEFAULT_CHAIN_ID);
+    return dexVersion === 'v3'
+      ? getContractAddress('PRESALE_V3_FACTORY', DEFAULT_CHAIN_ID)
+      : getContractAddress('PRESALE_FACTORY', DEFAULT_CHAIN_ID);
+  };
+
+  const getFactoryABI = () => {
+    return dexVersion === 'v3' ? PRESALE_V3_FACTORY_ABI : PRESALE_FACTORY_ABI;
+  };
+
+  const getPresaleABI = () => {
+    return dexVersion === 'v3' ? PRESALE_V3_ABI : PRESALE_ABI;
   };
 
   const formatDateTime = (dateString: string) => {
@@ -1178,6 +926,15 @@ export default function PresaleCreator() {
           <CardTitle className="text-white">Presale Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* V3 Indicator Banner */}
+          {dexVersion === 'v3' && (
+            <div className="bg-purple-900/30 border border-purple-500/30 rounded-lg p-3 mb-4">
+              <p className="text-purple-300 text-sm">
+                V3 Presale — Liquidity will be deployed to a Uniswap V3 concentrated liquidity pool
+              </p>
+            </div>
+          )}
+
           {/* Project Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-white">Project Information</h3>
@@ -1472,6 +1229,24 @@ export default function PresaleCreator() {
               </Select>
               <p className="text-xs text-gray-400">Percentage of raised funds used for liquidity</p>
             </div>
+
+            {/* V3 Fee Tier Selector */}
+            {dexVersion === 'v3' && (
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="v3FeeTier" className="text-gray-300">V3 Pool Fee Tier</Label>
+                <Select value={String(v3FeeTier)} onValueChange={(value) => setV3FeeTier(Number(value))}>
+                  <SelectTrigger className="h-12 form-input">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="select-content">
+                    <SelectItem value="500" className="select-item">0.05% — Best for stablecoins</SelectItem>
+                    <SelectItem value="3000" className="select-item">0.3% — Best for most pairs (Recommended)</SelectItem>
+                    <SelectItem value="10000" className="select-item">1% — Best for exotic pairs</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400">Fee tier for the V3 concentrated liquidity pool</p>
+              </div>
+            )}
           </div>
 
           {/* LP Lock Settings */}
@@ -1616,21 +1391,40 @@ export default function PresaleCreator() {
             </div>
           )}
 
-          {/* Router Configuration Info */}
+          {/* Router / Position Manager Configuration Info */}
           <div className="flex items-start gap-3 p-4 bg-blue-900/20 border border-blue-500/20 rounded-lg">
             <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
             <div>
-              <h4 className="font-medium text-white mb-1">DEX Router Configuration</h4>
+              <h4 className="font-medium text-white mb-1">
+                {dexVersion === 'v3' ? 'V3 Liquidity Configuration' : 'DEX Router Configuration'}
+              </h4>
               <div className="text-sm text-gray-300 space-y-1">
-                <p>• <strong>Router Address:</strong> {getContractAddress('ROUTER', DEFAULT_CHAIN_ID)}</p>
-                <p>• <strong>Network:</strong> {DEFAULT_CHAIN_ID === CHAIN_IDS.KALYCHAIN ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
-                <p>• <strong>DEX:</strong> KalySwap Router</p>
-                <div className="mt-2 pt-2 border-t border-blue-500/20">
-                  <p className="text-xs text-gray-400">
-                    <strong>Note:</strong> The router address will be automatically set after presale creation.
-                    This tells investors which DEX will be used for liquidity listing when the presale is finalized.
-                  </p>
-                </div>
+                {dexVersion === 'v3' ? (
+                  <>
+                    <p>• <strong>Position Manager:</strong> {(getContracts(DEFAULT_CHAIN_ID) as Record<string, string>)['V3_NONFUNGIBLE_POSITION_MANAGER'] || 'Not configured'}</p>
+                    <p>• <strong>Fee Tier:</strong> {v3FeeTier === 500 ? '0.05%' : v3FeeTier === 3000 ? '0.3%' : '1%'}</p>
+                    <p>• <strong>Network:</strong> {Number(DEFAULT_CHAIN_ID) === Number(CHAIN_IDS.KALYCHAIN) ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
+                    <p>• <strong>DEX:</strong> KalySwap V3 (Concentrated Liquidity)</p>
+                    <div className="mt-2 pt-2 border-t border-blue-500/20">
+                      <p className="text-xs text-gray-400">
+                        <strong>Note:</strong> The V3 position manager will be automatically configured after presale creation.
+                        Liquidity will be deployed to a concentrated liquidity pool with the selected fee tier.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>• <strong>Router Address:</strong> {getContractAddress('ROUTER', DEFAULT_CHAIN_ID)}</p>
+                    <p>• <strong>Network:</strong> {Number(DEFAULT_CHAIN_ID) === Number(CHAIN_IDS.KALYCHAIN) ? 'KalyChain Mainnet' : 'KalyChain Testnet'}</p>
+                    <p>• <strong>DEX:</strong> KalySwap Router</p>
+                    <div className="mt-2 pt-2 border-t border-blue-500/20">
+                      <p className="text-xs text-gray-400">
+                        <strong>Note:</strong> The router address will be automatically set after presale creation.
+                        This tells investors which DEX will be used for liquidity listing when the presale is finalized.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1670,7 +1464,7 @@ export default function PresaleCreator() {
                     ) : (
                       <div className="h-4 w-4 rounded-full border-2 border-gray-500"></div>
                     )}
-                    <span>3. Configure router</span>
+                    <span>3. {dexVersion === 'v3' ? 'Configure V3 position manager' : 'Configure router'}</span>
                   </div>
                   <div className={`flex items-center gap-2 text-sm ${currentStep === 'setting-lplock' ? 'text-blue-400 font-medium' : (currentStep === 'saving' || currentStep === 'complete') ? 'text-green-400' : 'text-gray-400'}`}>
                     {(currentStep === 'saving' || currentStep === 'complete') ? (
@@ -1774,7 +1568,7 @@ export default function PresaleCreator() {
               <div>
                 <h4 className="font-medium text-white mb-1">Wallet Required</h4>
                 <p className="text-sm text-gray-300">
-                  Please connect your wallet to create a presale. You can use either an external wallet (MetaMask) or create an internal KalySwap wallet.
+                  Please connect your wallet to create a presale.
                 </p>
               </div>
             </div>
@@ -1792,7 +1586,7 @@ export default function PresaleCreator() {
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 {currentStep === 'approving' && 'Approving Tokens...'}
                 {currentStep === 'creating' && 'Creating Presale...'}
-                {currentStep === 'setting-router' && 'Setting Router...'}
+                {currentStep === 'setting-router' && (dexVersion === 'v3' ? 'Setting Position Manager...' : 'Setting Router...')}
                 {currentStep === 'setting-lplock' && 'Configuring LP Lock...'}
                 {currentStep === 'saving' && 'Saving Project...'}
                 {currentStep === 'idle' && 'Preparing...'}

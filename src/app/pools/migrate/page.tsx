@@ -9,7 +9,7 @@ import { getKalyChainTokenByAddress } from '@/config/dex/tokens/kalychain';
 import { Token } from '@/config/dex/types';
 import V3Migration from '@/components/liquidity/v3/V3Migration';
 import { formatUnits } from 'viem';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ConnectWalletButton } from '@/components/wallet/ConnectWallet';
 import MainLayout from '@/components/layout/MainLayout';
 
 // Temporary type for positions from userPools hook
@@ -66,7 +66,7 @@ export default function MigrateWithFallback() {
                             <h2 className="text-xl font-bold mb-4 text-white">Wallet Not Connected</h2>
                             <p className="text-gray-400 mb-8">Please connect your wallet to view your V2 positions.</p>
                             <div className="flex justify-center">
-                                <ConnectButton />
+                                <ConnectWalletButton />
                             </div>
                         </Card>
                     </div>

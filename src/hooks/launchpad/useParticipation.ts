@@ -1,16 +1,16 @@
 import { launchpadLogger } from '@/lib/logger';
 import { useState, useCallback } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { parseEther, formatEther, encodeFunctionData } from 'viem'
-import { PRESALE_ABI, FAIRLAUNCH_ABI, ERC20_ABI } from '@/config/abis'
+import { parseEther, formatEther } from 'viem'
+import { PRESALE_ABI, FAIRLAUNCH_ABI, PRESALE_V3_ABI, FAIRLAUNCH_V3_ABI, ERC20_ABI } from '@/config/abis'
 import { isNativeToken } from '@/config/contracts'
-import { internalWalletUtils } from '@/connectors/internalWallet'
 
 interface ParticipationParams {
   contractAddress: string
   projectType: 'presale' | 'fairlaunch'
   amount: string
   baseToken: string
+  dexVersion?: 'v2' | 'v3'
 }
 
 interface UserContribution {
@@ -31,26 +31,13 @@ interface UseParticipationReturn {
   
   // Actions
   participate: (params: ParticipationParams) => Promise<void>
-  claimTokens: (contractAddress: string, projectType: string) => Promise<void>
-  claimRefund: (contractAddress: string, projectType: string) => Promise<void>
-  fetchUserContribution: (contractAddress: string, projectType: string) => Promise<void>
+  claimTokens: (contractAddress: string, projectType: string, dexVersion?: string) => Promise<void>
+  claimRefund: (contractAddress: string, projectType: string, dexVersion?: string) => Promise<void>
+  fetchUserContribution: (contractAddress: string, projectType: string, isProjectFinalized?: boolean, dexVersion?: string) => Promise<void>
   
   // Validation
   canParticipate: (amount: string, contractAddress: string) => Promise<{ canParticipate: boolean; reason?: string }>
-  getContributionLimits: (contractAddress: string, projectType: string) => Promise<{ min: string; max: string }>
-}
-
-// Helper function to check if using internal wallet
-function isUsingInternalWallet(connector: any): boolean {
-  return connector?.id === 'internalWallet'
-}
-
-// Helper function to prompt for password
-async function promptForPassword(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const password = window.prompt('Enter your wallet password to confirm the transaction:')
-    resolve(password)
-  })
+  getContributionLimits: (contractAddress: string, projectType: string, dexVersion?: string) => Promise<{ min: string; max: string }>
 }
 
 export function useParticipation(): UseParticipationReturn {
@@ -59,16 +46,19 @@ export function useParticipation(): UseParticipationReturn {
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
   const [userContribution, setUserContribution] = useState<UserContribution | null>(null)
 
-  const { address, isConnected, connector } = useAccount()
+  const { address, isConnected } = useAccount()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
 
-  // Get appropriate ABI based on project type
-  const getContractABI = (projectType: string) => {
+  // Get appropriate ABI based on project type and dex version
+  const getContractABI = (projectType: string, dexVersion?: string) => {
+    if (dexVersion === 'v3') {
+      return projectType === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI
+    }
     return projectType === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
   }
 
-  // Execute contract call with support for both wallet types
+  // Execute contract call via standard Wagmi writeContract
   const executeContractCall = useCallback(async (
     contractAddress: string,
     abi: any,
@@ -80,83 +70,21 @@ export function useParticipation(): UseParticipationReturn {
       throw new Error('Wallet not connected')
     }
 
-    if (isUsingInternalWallet(connector)) {
-      // Internal wallet flow
-      const internalWalletState = internalWalletUtils.getState()
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No internal wallet connected')
-      }
-
-      const password = await promptForPassword()
-      if (!password) {
-        throw new Error('Password required for transaction')
-      }
-
-      const functionData = encodeFunctionData({
-        abi,
-        functionName,
-        args,
-      })
-
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('Authentication required')
-      }
-
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value,
-              data: functionData,
-              password: password,
-              chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '300000'
-            }
-          }
-        }),
-      })
-
-      const result = await response.json()
-      if (result.errors) {
-        throw new Error(result.errors[0].message)
-      }
-
-      return result.data.sendContractTransaction.hash
-    } else {
-      // External wallet flow
-      if (!walletClient) {
-        throw new Error('Wallet client not available')
-      }
-
-      const hash = await walletClient.writeContract({
-        address: contractAddress as `0x${string}`,
-        abi,
-        functionName,
-        args,
-        value: value ? BigInt(value) : undefined,
-        gas: BigInt(300000),
-      })
-
-      return hash
+    if (!walletClient) {
+      throw new Error('Wallet client not available')
     }
-  }, [isConnected, address, connector, walletClient])
+
+    const hash = await walletClient.writeContract({
+      address: contractAddress as `0x${string}`,
+      abi,
+      functionName,
+      args,
+      value: value ? BigInt(value) : undefined,
+      gas: BigInt(300000),
+    })
+
+    return hash
+  }, [isConnected, address, walletClient])
 
   // Participate in presale/fairlaunch
   const participate = useCallback(async (params: ParticipationParams) => {
@@ -165,8 +93,8 @@ export function useParticipation(): UseParticipationReturn {
     setTransactionHash(null)
 
     try {
-      const { contractAddress, projectType, amount, baseToken } = params
-      const abi = getContractABI(projectType)
+      const { contractAddress, projectType, amount, baseToken, dexVersion } = params
+      const abi = getContractABI(projectType, dexVersion)
       const isNative = isNativeToken(baseToken)
       
       let value = '0'
@@ -205,12 +133,12 @@ export function useParticipation(): UseParticipationReturn {
   }, [executeContractCall])
 
   // Claim tokens after successful presale
-  const claimTokens = useCallback(async (contractAddress: string, projectType: string) => {
+  const claimTokens = useCallback(async (contractAddress: string, projectType: string, dexVersion?: string) => {
     setIsLoading(true)
     setError(null)
 
     try {
-      const abi = getContractABI(projectType)
+      const abi = getContractABI(projectType, dexVersion)
       
       const hash = await executeContractCall(
         contractAddress,
@@ -231,12 +159,12 @@ export function useParticipation(): UseParticipationReturn {
   }, [executeContractCall])
 
   // Claim refund for failed presale
-  const claimRefund = useCallback(async (contractAddress: string, projectType: string) => {
+  const claimRefund = useCallback(async (contractAddress: string, projectType: string, dexVersion?: string) => {
     setIsLoading(true)
     setError(null)
 
     try {
-      const abi = getContractABI(projectType)
+      const abi = getContractABI(projectType, dexVersion)
       
       const hash = await executeContractCall(
         contractAddress,
@@ -257,11 +185,11 @@ export function useParticipation(): UseParticipationReturn {
   }, [executeContractCall])
 
   // Fetch user's contribution data
-  const fetchUserContribution = useCallback(async (contractAddress: string, projectType: string, isProjectFinalized: boolean = false) => {
+  const fetchUserContribution = useCallback(async (contractAddress: string, projectType: string, isProjectFinalized: boolean = false, dexVersion?: string) => {
     if (!address || !publicClient) return
 
     try {
-      const abi = getContractABI(projectType)
+      const abi = getContractABI(projectType, dexVersion)
 
       // Read user's contribution amount using the correct function name
       let contributionAmount: bigint = 0n
@@ -343,13 +271,13 @@ export function useParticipation(): UseParticipationReturn {
   }, [address, publicClient])
 
   // Get contribution limits from contract
-  const getContributionLimits = useCallback(async (contractAddress: string, projectType: string): Promise<{ min: string; max: string }> => {
+  const getContributionLimits = useCallback(async (contractAddress: string, projectType: string, dexVersion?: string): Promise<{ min: string; max: string }> => {
     if (!publicClient) {
       return { min: '0.1', max: '10' } // Default limits
     }
 
     try {
-      const abi = getContractABI(projectType)
+      const abi = getContractABI(projectType, dexVersion)
 
       if (projectType === 'presale') {
         // For presale contracts, use presaleInfo() function which returns a struct

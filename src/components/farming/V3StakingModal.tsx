@@ -95,6 +95,7 @@ export default function V3StakingModal({
 
             try {
                 const config = getV3Config(CHAIN_IDS.KALYCHAIN_TESTNET)
+                if (!config) return
                 const positionManagerAddress = config.positionManager as `0x${string}`
 
                 // 1. Get the number of positions owned by the user

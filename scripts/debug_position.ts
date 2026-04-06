@@ -17,6 +17,7 @@ async function main() {
     console.log('Fetching position 1...');
 
     const service = getKalySwapV3Service(chainId);
+    if (!service) throw new Error('V3 not available on this chain');
     const tokenId = 1n; // User's position ID from screenshot
 
     try {

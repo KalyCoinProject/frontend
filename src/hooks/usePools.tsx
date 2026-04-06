@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { parseUnits, formatUnits, getContract, encodeFunctionData } from 'viem';
+import { parseUnits, formatUnits, getContract } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { ROUTER_ABI, FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
-import { internalWalletUtils } from '@/connectors/internalWallet';
 import { DexService, Token as DexToken } from '@/services/dex';
 import { poolLogger } from '@/lib/logger';
 
@@ -48,148 +47,35 @@ export function usePools() {
   const [approvalStates, setApprovalStates] = useState<{ [key: string]: ApprovalState }>({});
 
   // Wagmi hooks for wallet interaction
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // Check if using internal wallet
-  const isUsingInternalWallet = () => {
-    return connector?.id === 'kalyswap-internal';
-  };
-
-  // Helper function to prompt for password (similar to swap interface)
-  const promptForPassword = (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-          <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this transaction.</p>
-          <input
-            type="password"
-            placeholder="Enter your wallet password"
-            class="w-full p-3 border rounded-lg mb-4 password-input"
-            autofocus
-          />
-          <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-            <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-      const handleConfirm = () => {
-        const password = passwordInput.value;
-        document.body.removeChild(modal);
-        resolve(password || null);
-      };
-
-      const handleCancel = () => {
-        document.body.removeChild(modal);
-        resolve(null);
-      };
-
-      confirmBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-      passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConfirm();
-      });
-
-      document.body.appendChild(modal);
-    });
-  };
-
-  // Helper function to execute contract calls with proper internal wallet handling
+  // Helper function to execute contract calls via standard Wagmi writeContract
   const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi = ROUTER_ABI) => {
-    if (isUsingInternalWallet()) {
-      const internalWalletState = internalWalletUtils.getState();
-      if (!internalWalletState.activeWallet) {
-        throw new Error('No internal wallet connected');
-      }
+    if (!walletClient) throw new Error('Wallet client not available');
 
-      const password = await promptForPassword();
-      if (!password) {
-        throw new Error('Password required for transaction signing');
-      }
+    poolLogger.debug('Executing contract call:', {
+      address: contractAddress,
+      functionName,
+      args,
+      value: value?.toString()
+    });
 
-      const data = encodeFunctionData({
+    try {
+      const result = await walletClient.writeContract({
+        address: contractAddress as `0x${string}`,
         abi,
         functionName,
-        args
-      });
-
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation SendContractTransaction($input: SendContractTransactionInput!) {
-              sendContractTransaction(input: $input) {
-                id
-                hash
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              walletId: internalWalletState.activeWallet.id,
-              toAddress: contractAddress,
-              value: value?.toString() || '0',
-              data: data,
-              password: password,
-              chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '500000'
-            }
-          }
-        }),
-      });
-
-      const result = await response.json();
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      return result.data.sendContractTransaction.hash as `0x${string}`;
-    } else {
-      if (!walletClient) throw new Error('Wallet client not available');
-
-      poolLogger.debug('Executing external wallet contract call:', {
-        address: contractAddress,
-        functionName,
         args,
-        value: value?.toString()
+        value,
       });
 
-      try {
-        // Try without gas limit first to let wallet estimate
-        const result = await walletClient.writeContract({
-          address: contractAddress as `0x${string}`,
-          abi,
-          functionName,
-          args,
-          value,
-        });
-
-        poolLogger.debug('Contract call successful:', result);
-        return result;
-      } catch (err) {
-        poolLogger.error('Contract call failed:', err);
-        throw err;
-      }
+      poolLogger.debug('Contract call successful:', result);
+      return result;
+    } catch (err) {
+      poolLogger.error('Contract call failed:', err);
+      throw err;
     }
   };
 

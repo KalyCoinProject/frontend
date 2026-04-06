@@ -9,7 +9,6 @@ import { stakingLogger } from '@/lib/logger';
 import { useState, useCallback } from 'react'
 import { parseEther } from 'viem'
 import { useWallet } from '@/hooks/useWallet'
-import { useAccount } from 'wagmi'
 import { STAKING_CONTRACT, STAKING_FUNCTIONS } from '@/config/contracts/staking'
 import { parseKLCAmount, validateStakeAmount } from '@/utils/staking/mathHelpers'
 import {
@@ -20,59 +19,6 @@ import {
   createStakingTransaction
 } from '@/utils/staking/contractHelpers'
 import { useToast } from '@/components/ui/toast'
-import { internalWalletUtils } from '@/connectors/internalWallet'
-
-// Helper function to check if using internal wallet
-const isUsingInternalWallet = (connector: any) => {
-  return connector?.id === 'kalyswap-internal';
-};
-
-// Helper function to prompt for password (same as swaps page)
-const promptForPassword = (): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-        <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this staking transaction.</p>
-        <input
-          type="password"
-          placeholder="Enter your wallet password"
-          class="w-full p-3 border rounded-lg mb-4 password-input"
-          autofocus
-        />
-        <div class="flex gap-2">
-          <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-          <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
-        </div>
-      </div>
-    `;
-
-    const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
-    const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
-    const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
-
-    const handleConfirm = () => {
-      const password = passwordInput.value;
-      document.body.removeChild(modal);
-      resolve(password || null);
-    };
-
-    const handleCancel = () => {
-      document.body.removeChild(modal);
-      resolve(null);
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleConfirm();
-    });
-
-    document.body.appendChild(modal);
-  });
-};
 
 /**
  * Hook for staking KLC tokens
@@ -81,11 +27,10 @@ export function useStakeKLC() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { signTransaction, address } = useWallet()
-  const { connector } = useAccount()
   const toast = useToast()
 
   const stakeKLC = useCallback(async (amount: string) => {
-    if (!address) {
+    if (!signTransaction || !address) {
       throw new Error('Wallet not connected')
     }
 
@@ -102,80 +47,12 @@ export function useStakeKLC() {
       stakingLogger.debug('🥩 Staking KLC:', {
         amount,
         amountWei: amountWei.toString(),
-        isInternal: isUsingInternalWallet(connector),
         contractAddress: STAKING_CONTRACT.address
       })
 
-      let txHash: string;
-
-      if (isUsingInternalWallet(connector)) {
-        // For internal wallets, use direct GraphQL call (same as swaps page)
-        const internalWalletState = internalWalletUtils.getState();
-        if (!internalWalletState.activeWallet) {
-          throw new Error('No internal wallet connected');
-        }
-
-        // Get password from user
-        const password = await promptForPassword();
-        if (!password) {
-          throw new Error('Password required for staking transaction');
-        }
-
-        // Encode the stake function call
-        const functionData = encodeStakeCall();
-
-        // Make GraphQL call to backend
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        const response = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: `
-              mutation SendContractTransaction($input: SendContractTransactionInput!) {
-                sendContractTransaction(input: $input) {
-                  id
-                  hash
-                  status
-                }
-              }
-            `,
-            variables: {
-              input: {
-                walletId: internalWalletState.activeWallet.id,
-                toAddress: STAKING_CONTRACT.address,
-                value: amountWei.toString(),
-                data: functionData,
-                password: password,
-                chainId: internalWalletState.activeWallet.chainId,
-                gasLimit: '300000'
-              }
-            }
-          }),
-        });
-
-        const result = await response.json();
-        if (result.errors) {
-          throw new Error(result.errors[0].message);
-        }
-
-        txHash = result.data.sendContractTransaction.hash;
-      } else {
-        // For external wallets, use the existing signTransaction method
-        if (!signTransaction) {
-          throw new Error('External wallet not available for transaction signing');
-        }
-
-        const functionData = encodeStakeCall()
-        const transaction = createStakingTransaction(functionData, amountWei)
-        txHash = await signTransaction(transaction)
-      }
+      const functionData = encodeStakeCall()
+      const transaction = createStakingTransaction(functionData, amountWei)
+      const txHash = await signTransaction(transaction)
 
       toast.success('Stake Transaction Sent', `Staking ${amount} KLC tokens...`)
 
@@ -207,7 +84,7 @@ export function useStakeKLC() {
     } finally {
       setIsLoading(false)
     }
-  }, [signTransaction, address, connector])
+  }, [signTransaction, address])
 
   return {
     stakeKLC,

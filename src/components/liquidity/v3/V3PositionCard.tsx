@@ -93,6 +93,7 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
         const fetchTick = async () => {
             try {
                 const service = getKalySwapV3Service(chainId);
+                if (!service) return;
                 const poolInfo = await service.getV3PoolInfo(
                     { address: position.token0, decimals: 18, symbol: '', name: '', chainId, logoURI: '' },
                     { address: position.token1, decimals: 18, symbol: '', name: '', chainId, logoURI: '' },
