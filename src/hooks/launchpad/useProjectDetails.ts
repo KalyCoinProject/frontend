@@ -2,7 +2,7 @@ import { launchpadLogger } from '@/lib/logger';
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePublicClient } from 'wagmi'
 import { useHydration } from '@/hooks/useHydration'
-import { PRESALE_ABI, FAIRLAUNCH_ABI } from '@/config/abis'
+import { PRESALE_ABI, FAIRLAUNCH_ABI, PRESALE_V3_ABI, FAIRLAUNCH_V3_ABI } from '@/config/abis'
 
 // Types for project data
 export interface ProjectData {
@@ -42,6 +42,12 @@ export interface ProjectData {
 
   // Project type (added during data processing)
   type?: 'presale' | 'fairlaunch'
+
+  // V3-specific fields (populated when dexVersion is 'v3')
+  dexVersion?: 'v2' | 'v3'
+  v3PoolAddress?: string
+  v3PositionTokenId?: number
+  v3PoolFee?: number
 
   // Subgraph fields (blockchain data)
   status?: 'Active' | 'Successful' | 'Failed' | 'Cancelled' | 'Pending'
@@ -187,6 +193,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
                 presaleEnd
                 lpLockDuration
                 lpRecipient
+                dexVersion
                 contractAddress
               }
             }
@@ -230,6 +237,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
                 fairlaunchEnd
                 isWhitelist
                 referrer
+                dexVersion
                 contractAddress
               }
             }
@@ -260,7 +268,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
       return null // Not found in either table
     }
 
-    const fetchContractData = async (address: string, type: 'presale' | 'fairlaunch') => {
+    const fetchContractData = async (address: string, type: 'presale' | 'fairlaunch', dexVersion: 'v2' | 'v3' = 'v2') => {
       try {
         // Skip if wagmi not ready
         if (!publicClient || !isHydrated) {
@@ -268,7 +276,9 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
           return null
         }
 
-        const abi = type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+        const abi = dexVersion === 'v3'
+          ? (type === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI)
+          : (type === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI)
 
         // Use Promise.all for efficient parallel contract reads
         const contractReads = await Promise.all([
@@ -474,14 +484,32 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
         // Use project type from database if available, otherwise detect from contract
         const projectType = dbData.type || await detectProjectType(currentAddress)
 
+        // Detect dex version: prefer DB field, fallback to on-chain detection
+        let dexVersion: 'v2' | 'v3' = (dbData.dexVersion === 'v3') ? 'v3' : 'v2'
+        if (!dbData.dexVersion && publicClient && isHydrated) {
+          try {
+            const v3Abi = projectType === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI
+            await publicClient.readContract({
+              address: currentAddress as `0x${string}`,
+              abi: v3Abi,
+              functionName: 'v3PoolAddress',
+            })
+            dexVersion = 'v3'
+          } catch {
+            dexVersion = 'v2'
+          }
+        }
+
         // Fetch contract data (replaces broken subgraph)
-        const contractAggregateData = await fetchContractData(currentAddress, projectType)
+        const contractAggregateData = await fetchContractData(currentAddress, projectType, dexVersion)
 
         // Fetch live contract data
-        let contractData = {}
+        let contractData: Record<string, any> = {}
         if (publicClient && isHydrated) {
           try {
-            const abi = projectType === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI
+            const abi = dexVersion === 'v3'
+              ? (projectType === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI)
+              : (projectType === 'presale' ? PRESALE_ABI : FAIRLAUNCH_ABI)
 
             // Get basic contract info and status
             const [contractStatus, owner, finalized] = await Promise.all([
@@ -511,6 +539,35 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
               tokenUnlockTime: 0,
               lpTokensWithdrawn: false
             }
+
+            // Read V3-specific state when detected
+            if (dexVersion === 'v3') {
+              try {
+                const v3Abi = projectType === 'presale' ? PRESALE_V3_ABI : FAIRLAUNCH_V3_ABI
+                const [poolAddress, tokenId, poolFee] = await Promise.all([
+                  publicClient.readContract({
+                    address: currentAddress as `0x${string}`,
+                    abi: v3Abi,
+                    functionName: 'v3PoolAddress',
+                  }) as Promise<string>,
+                  publicClient.readContract({
+                    address: currentAddress as `0x${string}`,
+                    abi: v3Abi,
+                    functionName: 'v3PositionTokenId',
+                  }) as Promise<bigint>,
+                  publicClient.readContract({
+                    address: currentAddress as `0x${string}`,
+                    abi: v3Abi,
+                    functionName: 'v3PoolFee',
+                  }) as Promise<bigint>,
+                ])
+                contractData.v3PoolAddress = poolAddress as string
+                contractData.v3PositionTokenId = Number(tokenId)
+                contractData.v3PoolFee = Number(poolFee)
+              } catch (v3Error) {
+                launchpadLogger.warn('Could not fetch V3-specific contract data:', v3Error)
+              }
+            }
           } catch (error) {
             launchpadLogger.warn('Could not fetch live contract data:', error)
           }
@@ -523,6 +580,7 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
         const mergedData: ProjectData = {
           ...dbData,
           type: projectType,
+          dexVersion,
           ...computedFields,
           ...contractData
         }

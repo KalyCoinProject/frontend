@@ -69,9 +69,16 @@ export default function ProjectConfiguration({ projectData }: ProjectConfigurati
             <Settings className="h-5 w-5 mr-2" />
             {isPresale ? 'Presale' : 'Fairlaunch'} Configuration
           </span>
-          <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
-            {projectData.type?.toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {projectData.dexVersion === 'v3' && (
+              <Badge className="bg-violet-500/20 text-violet-400 border-violet-500/30">
+                V3 Concentrated Liquidity
+              </Badge>
+            )}
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+              {projectData.type?.toUpperCase()}
+            </Badge>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -240,8 +247,56 @@ export default function ProjectConfiguration({ projectData }: ProjectConfigurati
                 </code>
               </div>
             )}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">DEX Version:</span>
+              <Badge className={projectData.dexVersion === 'v3' ? 'bg-violet-500/20 text-violet-400 border-violet-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30'}>
+                {projectData.dexVersion === 'v3' ? 'Uniswap V3' : 'Uniswap V2'}
+              </Badge>
+            </div>
           </div>
         </div>
+
+        {/* V3 Liquidity Information */}
+        {projectData.dexVersion === 'v3' && (
+          <div className="mt-6 pt-6 border-t border-gray-700">
+            <h4 className="font-medium text-white mb-4 flex items-center">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              V3 Concentrated Liquidity
+            </h4>
+            <div className="space-y-3 text-sm">
+              {projectData.v3PoolAddress && projectData.v3PoolAddress !== '0x0000000000000000000000000000000000000000' && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">V3 Pool Address:</span>
+                  <a
+                    href={`https://testnet.kalyscan.io/address/${projectData.v3PoolAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline inline-flex items-center gap-1 font-mono text-xs bg-gray-800/50 px-2 py-1 rounded"
+                  >
+                    {projectData.v3PoolAddress.slice(0, 6)}...{projectData.v3PoolAddress.slice(-4)}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+              {projectData.v3PositionTokenId !== undefined && projectData.v3PositionTokenId > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Position NFT ID:</span>
+                  <span className="text-white font-mono text-xs bg-gray-800/50 px-2 py-1 rounded">
+                    #{projectData.v3PositionTokenId}
+                  </span>
+                </div>
+              )}
+              {projectData.v3PoolFee !== undefined && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Fee Tier:</span>
+                  <Badge className="bg-violet-500/20 text-violet-400 border-violet-500/30">
+                    {(projectData.v3PoolFee / 10000).toFixed(2)}%
+                  </Badge>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
