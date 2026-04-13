@@ -850,7 +850,7 @@ function SwapsPageContent({
     return (
       <MainLayout>
         <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
-          <div className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -868,7 +868,7 @@ function SwapsPageContent({
     return (
       <MainLayout>
         <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
-          <div className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="text-center">
                 <p className="text-red-600 mb-4">Failed to load tokens: {tokensError}</p>
@@ -884,7 +884,7 @@ function SwapsPageContent({
   return (
     <MainLayout>
       <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
 
             {/* Left side - Trading Chart and Transaction Data */}
