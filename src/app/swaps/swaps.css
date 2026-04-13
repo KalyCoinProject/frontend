@@ -95,7 +95,7 @@
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .trading-interface {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
   .token-selector {
@@ -112,12 +112,24 @@
   }
 
   .trading-chart-wrapper {
-    min-height: 350px;
-    max-height: 450px;
+    min-height: 280px;
+    max-height: 350px;
+  }
+
+  .chart-container {
+    border-radius: 8px;
   }
 
   .transaction-data-container {
     margin-top: 1rem;
+  }
+
+  .trading-controls-container {
+    order: -1; /* Move trading controls above chart on mobile */
+  }
+
+  .trading-controls-container > * {
+    border-radius: 8px;
   }
 }
 
@@ -130,6 +142,11 @@
 
   .trading-controls-container {
     order: -1; /* Move trading controls above chart on tablet */
+  }
+
+  .trading-chart-wrapper {
+    min-height: 400px;
+    max-height: 500px;
   }
 }
 
@@ -198,7 +215,7 @@
 .trading-chart-wrapper {
   position: relative;
   width: 100%;
-  min-height: 500px;
+  min-height: 400px;
   max-height: 650px;
   overflow: hidden;
   contain: layout style;

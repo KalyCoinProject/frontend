@@ -194,7 +194,7 @@ export default function FarmPage() {
           {/* Info Card */}
           <Card className="farm-card mb-6">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-semibold text-white mb-2">KalySwap Liquidity Mining</h2>
                   <p className="text-gray-300 text-sm">
@@ -204,7 +204,7 @@ export default function FarmPage() {
                     }
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   <p className="text-gray-400 text-sm">Total Value Locked</p>
                   <p className="text-2xl font-bold text-white">
                     {formatNumber(totalValueLocked, 0)} KLC
@@ -216,11 +216,11 @@ export default function FarmPage() {
 
           {/* V2/V3 Version Toggle */}
           <div className="mb-6">
-            <div className="flex items-center bg-stone-800/50 rounded-lg p-1 border border-gray-700/50 w-fit">
+            <div className="flex items-center bg-stone-800/50 rounded-lg p-1 border border-gray-700/50 w-full sm:w-fit">
               <button
                 onClick={() => setFarmVersion('v2')}
                 className={`
-                  px-4 py-2 rounded-md font-semibold text-sm transition-all duration-200
+                  flex-1 sm:flex-none px-4 py-2 rounded-md font-semibold text-sm transition-all duration-200
                   ${farmVersion === 'v2'
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
@@ -232,7 +232,7 @@ export default function FarmPage() {
               <button
                 onClick={() => setFarmVersion('v3')}
                 className={`
-                  px-4 py-2 rounded-md font-semibold text-sm transition-all duration-200
+                  flex-1 sm:flex-none px-4 py-2 rounded-md font-semibold text-sm transition-all duration-200
                   ${farmVersion === 'v3'
                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
@@ -251,7 +251,7 @@ export default function FarmPage() {
               <div className="mb-6">
                 <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
                   {/* Search */}
-                  <div className="relative flex-1 max-w-md">
+                  <div className="relative flex-1 w-full max-w-xs sm:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <Input
                       type="text"

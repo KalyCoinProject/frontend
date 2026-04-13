@@ -189,8 +189,10 @@ export function useSingleFarmData(token0Symbol: string, token1Symbol: string, ve
         throw new Error('Contracts not available')
       }
 
-      // Use multicall for this single farm
-      const multicall = createMulticallService(provider, chainId || CHAIN_IDS.KALYCHAIN)
+      // Farm data is always read from KalyChain mainnet (provider is hardcoded to mainnet RPC above),
+      // so the Multicall address must also resolve on mainnet — not whatever chain the wallet happens
+      // to be on. Passing the wallet's chainId here caused reverts when the wallet was on testnet.
+      const multicall = createMulticallService(provider, CHAIN_IDS.KALYCHAIN)
 
       farmingLogger.debug('📡 Executing multicall for single farm...')
 

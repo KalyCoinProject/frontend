@@ -109,7 +109,7 @@ export default function PoolsPage() {
         <div className="max-w-2xl mx-auto px-4">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-4">
                 <Button
                   variant="ghost"
@@ -129,7 +129,7 @@ export default function PoolsPage() {
               <Button
                 variant="outline"
                 onClick={() => router.push('/pools/browse')}
-                className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50"
+                className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50 ml-12 sm:ml-0"
                 style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
               >
                 <Search className="h-4 w-4" />
@@ -191,7 +191,7 @@ export default function PoolsPage() {
                       Choose the tokens you want to provide liquidity for. You can select tokens on all supported networks.
                     </p>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                           First token

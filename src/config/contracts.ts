@@ -192,9 +192,9 @@ export const NETWORK_CONFIG = {
   },
 } as const;
 
-// Default to testnet for V3 testing (change back to MAINNET for production)
-export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_TESTNET;
-export const DEFAULT_CONTRACTS = TESTNET_CONTRACTS;
+// Production: default to mainnet
+export const DEFAULT_CHAIN_ID = CHAIN_ID.KALYCHAIN_MAINNET;
+export const DEFAULT_CONTRACTS = MAINNET_CONTRACTS;
 
 // Helper function to get contract address by name
 export function getContractAddress(contractName: keyof typeof MAINNET_CONTRACTS, chainId: number = DEFAULT_CHAIN_ID): string {
