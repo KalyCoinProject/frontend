@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
 import { WalletProviders } from '@/components/providers/WalletProviders';
@@ -22,6 +22,12 @@ export const metadata: Metadata = {
     icon: '/favicon.ico',
     apple: '/icon.png',
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

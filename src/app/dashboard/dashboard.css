@@ -8,6 +8,12 @@
   position: relative;
 }
 
+@media (max-width: 640px) {
+  .dashboard-container {
+    padding: 1rem 0.5rem;
+  }
+}
+
 .dashboard-header {
   margin-bottom: 2rem;
 }
@@ -60,6 +66,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   backdrop-filter: blur(8px);
+}
+
+@media (max-width: 640px) {
+  .wallet-address {
+    font-size: 0.7rem;
+    white-space: normal;
+    word-break: break-all;
+  }
 }
 
 .wallet-balance {

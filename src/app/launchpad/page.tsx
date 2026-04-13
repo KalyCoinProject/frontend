@@ -70,8 +70,8 @@ export default function LaunchpadPage() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <div className="flex items-center justify-between mb-8">
-                  <TabsList className="grid w-full grid-cols-5 launchpad-tabs">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 launchpad-tabs">
                   <TabsTrigger value="overview" className="text-sm font-medium launchpad-tab">
                     Overview
                   </TabsTrigger>
@@ -84,12 +84,12 @@ export default function LaunchpadPage() {
                   <TabsTrigger value="fairlaunch" className="text-sm font-medium launchpad-tab">
                     Fairlaunch
                   </TabsTrigger>
-                  <TabsTrigger value="confirmed-projects" className="text-sm font-medium launchpad-tab">
-                    Confirmed Projects
+                  <TabsTrigger value="confirmed-projects" className="text-sm font-medium launchpad-tab col-span-2 sm:col-span-1">
+                    Projects
                   </TabsTrigger>
                   </TabsList>
                   {showVersionToggle && (
-                    <div className="ml-4 flex-shrink-0">
+                    <div className="flex-shrink-0">
                       <ProtocolVersionToggle size="sm" />
                     </div>
                   )}

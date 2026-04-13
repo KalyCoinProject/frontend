@@ -18,7 +18,7 @@ function BridgeTipCard() {
   if (!show) return null;
 
   return (
-    <Card className="w-100 p-2 sm:w-[31rem]">
+    <Card className="w-full p-2 sm:max-w-[31rem]">
       <CardContent className="pt-2">
         <h2 className="font-semibold" style={{ color: '#f59e0b' }}>Bridge Your Tokens with KalyBridge!</h2>
         <div className="flex items-end justify-between">
@@ -51,16 +51,16 @@ export default function BridgePage() {
         <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
           <div className="mx-auto flex max-w-screen-xl grow items-center px-4">
             <main className="my-4 flex w-full flex-1 items-center justify-center">
-              <div className="flex gap-8 items-start">
+              <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 items-start w-full max-w-4xl">
                 {/* Main Bridge Interface */}
-                <div className="space-y-3 pt-4">
+                <div className="space-y-3 pt-4 w-full lg:w-auto lg:flex-1">
                   <BridgeTipCard />
                   <BridgeCard />
                 </div>
 
                 {/* Transfer History Sidebar */}
-                <div className="pt-4">
-                  <TransferHistory className="w-80" />
+                <div className="pt-4 w-full lg:w-80">
+                  <TransferHistory className="w-full" />
                 </div>
               </div>
             </main>

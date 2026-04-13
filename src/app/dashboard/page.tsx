@@ -708,7 +708,7 @@ export default function DashboardPage() {
                   {/* Internal Wallet Connection Status */}
                   <InternalWalletStatus />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 wallet-grid">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 wallet-grid">
                     {user?.wallets.map((wallet) => (
                       <Card key={wallet.id} className="wallet-card">
                         <CardHeader className="wallet-header">

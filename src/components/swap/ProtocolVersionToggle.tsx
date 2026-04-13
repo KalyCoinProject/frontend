@@ -59,7 +59,7 @@ export default function ProtocolVersionToggle({
     };
 
     return (
-        <div className={`flex items-center ${config.gap} ${className}`}>
+        <div className={`flex flex-wrap items-center ${config.gap} ${className}`}>
             {showLabel && (
                 <span className="text-gray-400 mr-2 font-medium">Protocol:</span>
             )}
@@ -105,7 +105,7 @@ export default function ProtocolVersionToggle({
 
             {/* V3 Badge when active */}
             {protocolVersion === 'v3' && isV3Supported && (
-                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30">
+                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30 whitespace-nowrap">
                     Concentrated Liquidity
                 </span>
             )}
