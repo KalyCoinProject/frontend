@@ -593,22 +593,22 @@ export default function TradingChart({
   }
 
   return (
-    <div className={`bg-white rounded-lg border ${className}`}>
+    <div className={`bg-white rounded-lg border min-w-0 ${className}`}>
       {/* Chart Header */}
       <div className="p-4 border-b">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-gray-900">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 flex-1">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
               {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
             </h3>
             {currentPrice && (
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-gray-900">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">
                   ${formatTokenPrice(currentPrice, normalizedBaseToken?.symbol || 'TOKEN1')}
                 </span>
                 {priceChange24h !== null && (
                   <span
-                    className={`text-sm font-medium px-2 py-1 rounded ${priceChange24h >= 0
+                    className={`text-xs sm:text-sm font-medium px-2 py-1 rounded whitespace-nowrap ${priceChange24h >= 0
                         ? 'text-green-700 bg-green-100'
                         : 'text-red-700 bg-red-100'
                       }`}
@@ -618,11 +618,11 @@ export default function TradingChart({
                 )}
               </div>
             )}
-            <div className="text-sm text-gray-600">
-              24h Volume: {volumeLoading ? (
+            <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+              24h Vol: {volumeLoading ? (
                 <span className="inline-flex items-center gap-1">
                   <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                  Loading...
+                  ...
                 </span>
               ) : volume24h > 0 ? (
                 `$${volume24h.toLocaleString()}`
@@ -632,7 +632,7 @@ export default function TradingChart({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button onClick={refetchData} variant="ghost" size="sm" disabled={dataLoading}>
               <RefreshCw className={`h-4 w-4 ${dataLoading ? 'animate-spin' : ''}`} />
             </Button>

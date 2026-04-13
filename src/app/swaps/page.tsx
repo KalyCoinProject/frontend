@@ -883,12 +883,12 @@ function SwapsPageContent({
 
   return (
     <MainLayout>
-      <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white overflow-x-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
 
             {/* Left side - Trading Chart and Transaction Data */}
-            <div className="xl:col-span-3 space-y-8">
+            <div className="xl:col-span-3 space-y-8 min-w-0">
               {/* Trading Chart */}
               <div className="chart-container trading-chart-wrapper">
                 <TradingChart
@@ -915,7 +915,7 @@ function SwapsPageContent({
             </div>
 
             {/* Right side - Trading controls */}
-            <div className="trading-controls-container xl:col-span-1 space-y-6">
+            <div className="trading-controls-container xl:col-span-1 space-y-6 min-w-0">
 
 
 

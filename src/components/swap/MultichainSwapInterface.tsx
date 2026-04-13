@@ -599,8 +599,8 @@ export default function MultichainSwapInterface({
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-300">From</Label>
             <div className="relative">
-              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
-                <div className="flex items-center gap-3 flex-1">
+              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg gap-2">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   <Button
                     variant="ghost"
                     className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
@@ -618,7 +618,7 @@ export default function MultichainSwapInterface({
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="flex flex-col items-end flex-1">
+                <div className="flex flex-col items-end flex-1 min-w-0">
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -629,12 +629,12 @@ export default function MultichainSwapInterface({
                       const value = e.target.value.replace(/[^0-9.]/g, '');
                       handleFromAmountChange(value);
                     }}
-                    className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full"
+                    className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full min-w-0"
                     disabled={!isChainSupportedForSwap}
                   />
                   {swapState.fromToken && (
-                    <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                      <span>Balance: {getTokenBalance(swapState.fromToken)}</span>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center gap-1 max-w-full truncate">
+                      <span className="truncate">Balance: {getTokenBalance(swapState.fromToken)}</span>
                     </div>
                   )}
                 </div>
@@ -695,8 +695,8 @@ export default function MultichainSwapInterface({
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-300">To</Label>
             <div className="relative">
-              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
-                <div className="flex items-center gap-3 flex-1">
+              <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg gap-2">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   <Button
                     variant="ghost"
                     className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
