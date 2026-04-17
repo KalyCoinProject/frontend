@@ -110,8 +110,30 @@ export function usePools() {
       );
 
       poolLogger.debug('Approval hash:', approveHash);
-      await publicClient?.waitForTransactionReceipt({ hash: approveHash });
-      poolLogger.debug('Token approved successfully');
+      if (!publicClient) {
+        throw new Error('Public client not available to verify approval');
+      }
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      if (receipt.status !== 'success') {
+        throw new Error(`Approval transaction reverted on-chain (hash: ${approveHash})`);
+      }
+
+      // Re-read allowance to confirm it was actually granted — some wallets
+      // (smart accounts, AA relayers) can have the on-chain tx succeed but with
+      // a different effective sender than useAccount().address.
+      const allowance = await publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [address as `0x${string}`, spenderAddress as `0x${string}`],
+      }) as bigint;
+      if (allowance === 0n) {
+        throw new Error(
+          `Approval tx succeeded but on-chain allowance for ${address} -> ${spenderAddress} is still 0. ` +
+          `The transaction may have been submitted from a different sender than the connected wallet address.`
+        );
+      }
+      poolLogger.debug('Token approved successfully; allowance:', allowance.toString());
     } catch (err) {
       poolLogger.error('Error approving token:', err);
       throw err;
@@ -216,15 +238,25 @@ export function usePools() {
   }, []);
 
   const getPairInfo = useCallback(async (tokenA: string, tokenB: string): Promise<PairInfo | null> => {
+    // V2 factory only knows about pairs of WRAPPED tokens. When the caller
+    // passes native KLC (address(0)), substitute the configured WKLC address
+    // for both the subgraph query and the on-chain getPair() lookup —
+    // otherwise the factory will always return zero and the UI will claim
+    // the pool doesn't exist when it actually does (as WKLC pair).
+    const NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000';
+    const wklc = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+    const tokenAResolved = tokenA.toLowerCase() === NATIVE_ADDRESS ? wklc : tokenA;
+    const tokenBResolved = tokenB.toLowerCase() === NATIVE_ADDRESS ? wklc : tokenB;
+
     // First try to get pair info from subgraph (faster and more data)
-    const subgraphResult = await getPairInfoFromSubgraph(tokenA, tokenB);
+    const subgraphResult = await getPairInfoFromSubgraph(tokenAResolved, tokenBResolved);
     if (subgraphResult !== null) {
-      poolLogger.debug('Using subgraph data for pair:', tokenA, tokenB);
+      poolLogger.debug('Using subgraph data for pair:', tokenAResolved, tokenBResolved);
       return subgraphResult;
     }
 
     // Fallback to contract calls if subgraph fails
-    poolLogger.warn('Falling back to contract calls for pair:', tokenA, tokenB);
+    poolLogger.warn('Falling back to contract calls for pair:', tokenAResolved, tokenBResolved);
     if (!publicClient) return null;
 
     try {
@@ -236,7 +268,7 @@ export function usePools() {
       });
 
       // Get pair address from factory
-      const pairAddress = await factoryContract.read.getPair([tokenA, tokenB]);
+      const pairAddress = await factoryContract.read.getPair([tokenAResolved, tokenBResolved]);
 
       // Check if pair exists (address is not zero)
       if (pairAddress === '0x0000000000000000000000000000000000000000') {
@@ -411,6 +443,26 @@ export function usePools() {
       // Check if either token is native KLC
       const isTokenANative = tokenA === '0x0000000000000000000000000000000000000000';
       const isTokenBNative = tokenB === '0x0000000000000000000000000000000000000000';
+
+      // Pre-flight: verify allowance is sufficient for non-native tokens.
+      // Router reverts with opaque "TRANSFER_FROM_FAILED" if allowance is missing —
+      // re-check here so the user sees a clear "re-approve" message instead.
+      const checkAllowance = async (token: string, required: bigint) => {
+        const allowance = await publicClient.readContract({
+          address: token as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'allowance',
+          args: [address as `0x${string}`, routerAddress as `0x${string}`],
+        }) as bigint;
+        if (allowance < required) {
+          throw new Error(
+            `Insufficient allowance for token ${token}. Required ${required.toString()}, got ${allowance.toString()}. ` +
+            `Please re-approve.`
+          );
+        }
+      };
+      if (!isTokenANative) await checkAllowance(tokenA, amountADesired);
+      if (!isTokenBNative) await checkAllowance(tokenB, amountBDesired);
 
       if (isTokenANative || isTokenBNative) {
         // Handle KLC + Token liquidity

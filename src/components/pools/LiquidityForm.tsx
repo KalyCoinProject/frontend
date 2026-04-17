@@ -2,13 +2,39 @@
 
 import { poolLogger } from '@/lib/logger';
 
+// [instrumentation — temporary; remove once form jank is resolved]
+// Module-level counters to observe whether the 4 useEffects in this file are
+// cycling (e.g. from cascading wagmi store updates). Throttled to 1 log/sec.
+const __formDebug = {
+  approvalCheck: 0,
+  pairCheck: 0,
+  userPosition: 0,
+  calculateAmounts: 0,
+  lastLog: 0,
+};
+function __formThrottledLog() {
+  const now = Date.now();
+  if (now - __formDebug.lastLog < 1000) return;
+  __formDebug.lastLog = now;
+  poolLogger.debug('[form-debug]', {
+    approvalCheck: __formDebug.approvalCheck,
+    pairCheck: __formDebug.pairCheck,
+    userPosition: __formDebug.userPosition,
+    calculateAmounts: __formDebug.calculateAmounts,
+  });
+}
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/components/ui/toast';
 import { ArrowLeft, Plus, Info, Wallet } from 'lucide-react';
 import { usePools } from '@/hooks/usePools';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useConnectModal } from 'thirdweb/react';
+import { thirdwebClient } from '@/config/thirdweb';
+import { allWallets } from '@/config/thirdweb';
 import { useTokenBalances } from '@/hooks/useTokenBalance';
 import { formatUnits } from 'viem';
 import { Token } from '@/config/dex/types';
@@ -44,6 +70,18 @@ export default function LiquidityForm({
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { isV3 } = useProtocolVersion();
+  const toast = useToast();
+  const { connect: openConnectModal } = useConnectModal();
+
+  const handleConnectClick = async () => {
+    try {
+      await openConnectModal({ client: thirdwebClient, wallets: allWallets });
+    } catch (err) {
+      poolLogger.error('Connect wallet modal failed:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Could not open wallet connect', message);
+    }
+  };
 
   // Token balances
   const tokens = [tokenA, tokenB];
@@ -63,7 +101,6 @@ export default function LiquidityForm({
 
   const [pairExists, setPairExists] = useState<boolean | null>(null);
   const [marketPrice, setMarketPrice] = useState<string | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
   const [userLPBalance, setUserLPBalance] = useState<string>('0');
   const [pairAddress, setPairAddress] = useState<string>('');
 
@@ -85,6 +122,14 @@ export default function LiquidityForm({
   const getPairInfoRef = useRef(getPairInfo);
   const calculateOptimalAmountsRef = useRef(calculateOptimalAmounts);
 
+  // Re-entry guard for the amountB calculation effect. Using a ref (not the
+  // isCalculating state) keeps the effect from self-retriggering via its own
+  // dep array every time setIsCalculating flips.
+  const isCalculatingRef = useRef(false);
+  // Track which amountA we've already computed amountB for, so the effect
+  // doesn't re-run for the same input when unrelated deps change.
+  const lastComputedForAmountA = useRef<string | null>(null);
+
   // Update refs when props change
   useEffect(() => {
     onAmountBChangeRef.current = onAmountBChange;
@@ -94,6 +139,8 @@ export default function LiquidityForm({
 
   // Check approval states when tokens change
   useEffect(() => {
+    __formDebug.approvalCheck += 1;
+    __formThrottledLog();
     const checkApprovals = async () => {
       // Default to approved if native token
       let approvedA = tokenA.address === '0x0000000000000000000000000000000000000000';
@@ -124,7 +171,11 @@ export default function LiquidityForm({
     };
 
     checkApprovals();
-  }, [tokenA.address, tokenB.address, isV3, isConnected, address, amountA, amountB, chainId, publicClient]);
+    // Intentionally NOT depending on `publicClient` — its reference changes
+    // whenever the wagmi store mutates (bridge connect, chain-switch, etc.),
+    // which would re-trigger approval lookups for the same wallet/chain and
+    // waste RPC calls. chainId is the meaningful gate.
+  }, [tokenA.address, tokenB.address, isV3, isConnected, address, amountA, amountB, chainId]);
 
   // Simple approval callbacks
   const approveACallback = async () => {
@@ -139,7 +190,12 @@ export default function LiquidityForm({
         if (!walletClient) throw new Error('Wallet not connected');
         // Approve amountA or max uint256
         const amountToApprove = amountA && parseFloat(amountA) > 0 ? amountA : '115792089237316195423570985008687907853269984665640564039457';
-        await v3Service.approveToken(tokenA, amountToApprove, walletClient);
+        const txHash = await v3Service.approveToken(tokenA, amountToApprove, walletClient);
+        // BaseV3Service.approveToken returns the hash without waiting; wait here
+        // so the button only flips to APPROVED after the tx is actually mined.
+        if (publicClient && txHash) {
+          await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+        }
       } else {
         await approveToken(tokenA.address);
       }
@@ -148,6 +204,8 @@ export default function LiquidityForm({
     } catch (err) {
       setApprovalA(ApprovalState.NOT_APPROVED);
       poolLogger.error('Error approving token A:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Approval failed for ${tokenA.symbol}`, message);
     }
   };
 
@@ -163,7 +221,12 @@ export default function LiquidityForm({
         if (!walletClient) throw new Error('Wallet not connected');
         // Approve amountB or max uint256
         const amountToApprove = amountB && parseFloat(amountB) > 0 ? amountB : '115792089237316195423570985008687907853269984665640564039457';
-        await v3Service.approveToken(tokenB, amountToApprove, walletClient);
+        const txHash = await v3Service.approveToken(tokenB, amountToApprove, walletClient);
+        // BaseV3Service.approveToken returns the hash without waiting; wait here
+        // so the button only flips to APPROVED after the tx is actually mined.
+        if (publicClient && txHash) {
+          await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+        }
       } else {
         await approveToken(tokenB.address);
       }
@@ -172,11 +235,15 @@ export default function LiquidityForm({
     } catch (err) {
       setApprovalB(ApprovalState.NOT_APPROVED);
       poolLogger.error('Error approving token B:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Approval failed for ${tokenB.symbol}`, message);
     }
   };
 
   // Check if pair exists and get market price
   useEffect(() => {
+    __formDebug.pairCheck += 1;
+    __formThrottledLog();
     const checkPair = async () => {
       if (tokenA && tokenB) {
         try {
@@ -241,9 +308,12 @@ export default function LiquidityForm({
     };
 
     checkPair();
-  }, [tokenA.address, tokenB.address, isV3, isConnected, chainId, publicClient]);
+    // publicClient intentionally omitted — see note on approvals effect above.
+  }, [tokenA.address, tokenB.address, isV3, isConnected, chainId]);
 
   useEffect(() => {
+    __formDebug.userPosition += 1;
+    __formThrottledLog();
     const checkUserPosition = async () => {
       if (!address || (!pairAddress && !isV3) || (!pairExists && !isV3)) {
         setUserLPBalance('0');
@@ -298,15 +368,25 @@ export default function LiquidityForm({
     };
 
     checkUserPosition();
-  }, [address, pairAddress, pairExists, tokenA.symbol, tokenB.symbol, isV3, isConnected, chainId, publicClient]);
+    // publicClient intentionally omitted — see note on approvals effect above.
+  }, [address, pairAddress, pairExists, tokenA.symbol, tokenB.symbol, isV3, isConnected, chainId]);
 
   // Calculate optimal amounts when one amount changes (only for existing pools)
   useEffect(() => {
+    __formDebug.calculateAmounts += 1;
+    __formThrottledLog();
     const calculateAmounts = async () => {
       // Only calculate for existing pools, not new pools
-      if (pairExists !== true || !amountA || isCalculating) return;
+      if (pairExists !== true || !amountA) return;
+      // Skip if we've already computed amountB for this exact amountA input —
+      // prevents re-firing when unrelated deps (e.g. chainId unchanged but a
+      // parent re-render) re-enter this effect.
+      if (lastComputedForAmountA.current === amountA) return;
+      // Ref-based re-entry guard: avoids a React state dep on isCalculating
+      // that would itself retrigger this effect.
+      if (isCalculatingRef.current) return;
 
-      setIsCalculating(true);
+      isCalculatingRef.current = true;
       try {
         // V3 Logic
         if (isV3) {
@@ -321,6 +401,7 @@ export default function LiquidityForm({
               onAmountBChangeRef.current(calculatedAmountB);
             }
           }
+          lastComputedForAmountA.current = amountA;
           return;
         }
 
@@ -335,15 +416,23 @@ export default function LiquidityForm({
         if (optimalAmounts && optimalAmounts.amountB !== amountB) {
           onAmountBChangeRef.current(optimalAmounts.amountB);
         }
+        lastComputedForAmountA.current = amountA;
       } catch (error) {
         poolLogger.error('Error calculating optimal amounts:', error);
       } finally {
-        setIsCalculating(false);
+        isCalculatingRef.current = false;
       }
     };
 
     calculateAmounts();
-  }, [amountA, pairExists, tokenA.address, tokenB.address, amountB, isCalculating, isV3, isConnected, chainId, publicClient]);
+    // Intentionally excluded from deps:
+    //  - publicClient: identity-unstable, see note on approvals effect.
+    //  - isCalculating: replaced by isCalculatingRef to break self-retrigger.
+    //  - amountB: the effect sets amountB; having it in deps caused a
+    //    cascade. We read the current amountB via closure when deciding
+    //    whether to call onAmountBChange, which is correct because the
+    //    effect re-runs on amountA change with a fresh closure.
+  }, [amountA, pairExists, tokenA.address, tokenB.address, isV3, isConnected, chainId]);
 
 
 
@@ -696,7 +785,6 @@ export default function LiquidityForm({
                   value={amountB}
                   onChange={(e) => handleAmountBChange(e.target.value)}
                   className="border-0 text-2xl font-medium p-0 h-auto focus-visible:ring-0"
-                  disabled={pairExists === true && isCalculating}
                 />
                 <div className="flex items-center space-x-2 flex-shrink-0">
                   <div className="flex items-center">
@@ -789,6 +877,7 @@ export default function LiquidityForm({
       {/* Action Button */}
       {!isConnected ? (
         <Button
+          onClick={handleConnectClick}
           className="w-full py-3 text-base font-medium bg-purple-600 hover:bg-purple-700"
           size="lg"
         >

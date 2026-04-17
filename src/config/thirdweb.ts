@@ -7,7 +7,7 @@
 
 import { createThirdwebClient, defineChain } from 'thirdweb'
 import { inAppWallet, createWallet } from 'thirdweb/wallets'
-import { CHAIN_IDS, RPC_URLS } from './chains'
+import { CHAIN_IDS, RPC_URLS, RPC_URLS_ALL } from './chains'
 
 // ============================================================================
 // THIRDWEB CLIENT
@@ -21,14 +21,27 @@ export const thirdwebClient = createThirdwebClient({
 // THIRDWEB CHAIN DEFINITIONS (separate from Viem chain definitions in chains.ts)
 // ============================================================================
 
+/**
+ * Thirdweb's `defineChain` accepts only a single `rpc` URL (unlike viem's
+ * fallback transport). To spread load across our primary + backup kalychain
+ * endpoints we pick one at random per session. Without this, every user's
+ * tx submission and in-app-wallet session init hits the same endpoint — if
+ * it's saturated we get "Failed to fetch" on approve / sendTransaction.
+ */
+function pickSessionRpc(chainId: number): string {
+  const urls = RPC_URLS_ALL[chainId] ?? [RPC_URLS[chainId]].filter(Boolean)
+  if (urls.length === 0) return RPC_URLS[chainId] ?? ''
+  return urls[Math.floor(Math.random() * urls.length)]
+}
+
 export const twKalychain = defineChain({
   id: CHAIN_IDS.KALYCHAIN,
-  rpc: RPC_URLS[CHAIN_IDS.KALYCHAIN],
+  rpc: pickSessionRpc(CHAIN_IDS.KALYCHAIN),
 })
 
 export const twKalychainTestnet = defineChain({
   id: CHAIN_IDS.KALYCHAIN_TESTNET,
-  rpc: RPC_URLS[CHAIN_IDS.KALYCHAIN_TESTNET],
+  rpc: pickSessionRpc(CHAIN_IDS.KALYCHAIN_TESTNET),
 })
 
 export const twArbitrum = defineChain({

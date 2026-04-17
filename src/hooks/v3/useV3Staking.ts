@@ -84,7 +84,7 @@ async function fetchPendingRewards(
     return rewards;
 }
 
-export function useV3Staking(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
+export function useV3Staking(chainId: number = CHAIN_IDS.KALYCHAIN) {
     const { address } = useAccount();
     const publicClient = usePublicClient({ chainId });
     const { data: walletClient } = useWalletClient({ chainId });

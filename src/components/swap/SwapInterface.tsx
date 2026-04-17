@@ -18,6 +18,7 @@ import { useTokenLists } from '@/hooks/useTokenLists';
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient, useConfig, useConnectorClient } from 'wagmi';
+import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react';
 import { parseEther, formatEther, getContract, parseUnits, formatUnits } from 'viem';
 
 // Contract configuration imports
@@ -95,8 +96,17 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // Determine active chain ID (Connected Wallet > Default)
-  const activeChainId = (isConnected ? publicClient?.chain?.id : undefined) || DEFAULT_CHAIN_ID;
+  // Thirdweb in-app wallet is the source of truth for the user's KalySwap
+  // identity/chain when they are logged in; MetaMask can silently auto-connect
+  // in the background and point publicClient at the wrong (e.g. testnet) chain.
+  const thirdwebAccount = useActiveAccount();
+  const thirdwebChain = useActiveWalletChain();
+
+  // Determine active chain ID (Thirdweb in-app wallet > Connected wagmi wallet > Default)
+  const activeChainId =
+    (thirdwebAccount ? thirdwebChain?.id : undefined) ||
+    (isConnected ? publicClient?.chain?.id : undefined) ||
+    DEFAULT_CHAIN_ID;
 
   // Get dynamic token list based on active chain
   const { tokens: availableTokens } = useTokenLists({ chainId: activeChainId });

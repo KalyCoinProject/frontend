@@ -186,7 +186,7 @@ export function useTokenBalances(tokens: (Token | null)[]) {
                 const tokenBalance = await Promise.race([
                   tokenContract.read.balanceOf([address]),
                   new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Balance fetch timeout')), 5000)
+                    setTimeout(() => reject(new Error('Balance fetch timeout')), 15000)
                   )
                 ]) as bigint;
                 return {
@@ -196,10 +196,9 @@ export function useTokenBalances(tokens: (Token | null)[]) {
               } catch (contractError) {
                 // Handle tokens that don't implement proper ERC20 interface (like bridge tokens)
                 tokenLogger.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
-                return {
-                  symbol: token.symbol,
-                  balance: '0'
-                };
+                // Signal failure — caller will preserve any previously-loaded
+                // balance instead of overwriting the UI with a fake 0.
+                return { symbol: token.symbol, failed: true } as const;
               }
             }
           } catch (err) {
@@ -207,10 +206,8 @@ export function useTokenBalances(tokens: (Token | null)[]) {
             if (!(err instanceof Error && err.message.includes('timeout'))) {
               tokenLogger.error(`Error fetching balance for ${token.symbol}:`, err);
             }
-            return {
-              symbol: token.symbol,
-              balance: '0'
-            };
+            // Signal failure — do not overwrite previously-loaded balance.
+            return { symbol: token.symbol, failed: true } as const;
           }
         });
 
@@ -218,12 +215,17 @@ export function useTokenBalances(tokens: (Token | null)[]) {
         const balanceMap: Record<string, string> = {};
 
         results.forEach((result) => {
-          if (result) {
+          // Only accept results that actually fetched a balance. Failed/null
+          // entries are skipped so the previous good value survives a
+          // transient RPC timeout and the UI does not flicker to 0.
+          if (result && !('failed' in result)) {
             balanceMap[result.symbol] = result.balance;
           }
         });
 
-        setBalances(balanceMap);
+        // Merge with prior state so a partial failure only updates the
+        // successful tokens and leaves the rest untouched.
+        setBalances((prev) => ({ ...prev, ...balanceMap }));
         setLastFetchTime(Date.now());
 
         // Mark initial load as complete
@@ -251,7 +253,13 @@ export function useTokenBalances(tokens: (Token | null)[]) {
     const interval = setInterval(() => fetchBalances(false, false), 30000);
 
     return () => clearInterval(interval);
-  }, [address, isConnected, publicClient]);
+    // Gate on publicClient?.chain?.id (a stable primitive) rather than the
+    // publicClient object reference: the ref changes on every wagmi store
+    // mutation (connector connect, bridge sync), which caused the balance
+    // spinner to flicker every time the Thirdweb→wagmi bridge re-synced.
+    // The primitive only changes when the *chain* actually changes, which is
+    // the only case that requires re-fetching.
+  }, [address, isConnected, publicClient?.chain?.id]);
 
   // Helper function to get token by symbol
   const getTokenBySymbol = (symbol: string): Token | null => {

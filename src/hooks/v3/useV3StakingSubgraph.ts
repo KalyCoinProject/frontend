@@ -121,7 +121,7 @@ const GET_REWARD_CLAIMS = gql`
 
 // ========== Hook ==========
 
-export function useV3StakingSubgraph(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
+export function useV3StakingSubgraph(chainId: number = CHAIN_IDS.KALYCHAIN) {
     const { address } = useAccount();
     const [incentives, setIncentives] = useState<SubgraphIncentive[]>([]);
     const [userStakes, setUserStakes] = useState<SubgraphDeposit[]>([]);

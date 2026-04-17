@@ -13,10 +13,13 @@ interface WalletProvidersClientProps {
 }
 
 // Create QueryClient outside component to prevent recreation
+// staleTime: 5000 — balance/price reads inside a 5s window dedupe instead of
+// re-hitting the RPC on every store mutation. Pairs with batch:true transports
+// to reduce RPC pressure when wagmi state changes trigger cascading re-renders.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0,
+      staleTime: 5000,
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnMount: false,

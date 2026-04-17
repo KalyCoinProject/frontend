@@ -33,7 +33,7 @@ interface UseV3SwapReturn {
     service: ReturnType<typeof getKalySwapV3Service>;
 }
 
-export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseV3SwapReturn {
+export function useV3Swap(chainId: number = CHAIN_IDS.KALYCHAIN): UseV3SwapReturn {
     const publicClient = usePublicClient({ chainId });
     const { data: walletClient } = useWalletClient({ chainId });
     const { connector } = useAccount();

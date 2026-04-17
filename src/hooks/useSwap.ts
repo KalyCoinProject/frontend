@@ -31,7 +31,7 @@ interface UseSwapReturn {
 /**
  * Unified swap hook that automatically uses V2 or V3 based on user selection
  */
-export function useSwap(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): UseSwapReturn {
+export function useSwap(chainId: number = CHAIN_IDS.KALYCHAIN): UseSwapReturn {
     const { protocolVersion, isV3, isV3Supported } = useProtocolVersion();
 
     // Initialize both hooks

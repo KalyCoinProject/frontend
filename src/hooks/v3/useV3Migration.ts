@@ -7,6 +7,33 @@ import { poolLogger } from '@/lib/logger';
 import { getContract, encodeFunctionData, maxUint256 } from 'viem';
 import { PAIR_ABI } from '@/config/abis';
 
+/**
+ * Retry a wallet write when the RPC fails transiently (`Failed to fetch`).
+ * Signing already happened on-device; we're only retrying the submission.
+ * Does NOT retry reverts / user rejections / other contract errors.
+ */
+async function retryOnFetchFailure<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (err) {
+            lastErr = err;
+            const msg = err instanceof Error ? err.message : String(err);
+            const retriable =
+                msg.includes('Failed to fetch') ||
+                msg.includes('HTTP request failed') ||
+                msg.includes('fetch failed') ||
+                msg.includes('network') ||
+                msg.includes('timeout');
+            if (!retriable || i === attempts - 1) throw err;
+            poolLogger.warn(`RPC hiccup on attempt ${i + 1}/${attempts}, retrying:`, msg);
+            await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        }
+    }
+    throw lastErr;
+}
+
 export interface UseV3MigrationParams {
     token0: Token;
     token1: Token;
@@ -44,23 +71,31 @@ export const useV3Migration = ({
                 client: publicClient
             });
 
-            // Check allowance first
-            const allowance = await pairContract.read.allowance([address, migratorAddress]);
+            // Check allowance first (retry on transient RPC failure)
+            const allowance = await retryOnFetchFailure(() =>
+                pairContract.read.allowance([address, migratorAddress]),
+            );
 
             if (allowance as bigint >= BigInt(amount)) {
                 return 'already-approved';
             }
 
-            const { request } = await publicClient.simulateContract({
-                address: pairAddress as `0x${string}`,
-                abi: PAIR_ABI,
-                functionName: 'approve',
-                args: [migratorAddress, maxUint256], // Approve max for convenience
-                account: address
-            });
+            const { request } = await retryOnFetchFailure(() =>
+                publicClient.simulateContract({
+                    address: pairAddress as `0x${string}`,
+                    abi: PAIR_ABI,
+                    functionName: 'approve',
+                    args: [migratorAddress, maxUint256], // Approve max for convenience
+                    account: address
+                }),
+            );
 
-            const txHash = await walletClient.writeContract(request);
-            await publicClient.waitForTransactionReceipt({ hash: txHash });
+            const txHash = await retryOnFetchFailure(() =>
+                walletClient.writeContract(request),
+            );
+            await retryOnFetchFailure(() =>
+                publicClient.waitForTransactionReceipt({ hash: txHash }),
+            );
             return txHash;
 
         } catch (err: any) {
@@ -110,7 +145,9 @@ export const useV3Migration = ({
                 refundAsETH: false // Default to false for now, can expose if needed
             };
 
-            const txHash = await v3Service.migrateLiquidity(params, publicClient, walletClient);
+            const txHash = await retryOnFetchFailure(() =>
+                v3Service.migrateLiquidity(params, publicClient, walletClient),
+            );
             return txHash;
 
         } catch (err: any) {
@@ -147,15 +184,21 @@ export const useV3Migration = ({
             // Convert price to sqrtPriceX96 format required by V3 pool initialization
             const sqrtPriceX96 = v3Service.calculateSqrtPriceX96(startPrice, token0, token1);
 
-            const txHash = await v3Service.createAndInitializePool(
-                token0,
-                token1,
-                fee,
-                sqrtPriceX96,
-                walletClient
+            const txHash = await retryOnFetchFailure(() =>
+                v3Service.createAndInitializePool(
+                    token0,
+                    token1,
+                    fee,
+                    sqrtPriceX96,
+                    walletClient,
+                ),
             );
 
-            await publicClient?.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+            if (publicClient) {
+                await retryOnFetchFailure(() =>
+                    publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` }),
+                );
+            }
             return txHash;
 
         } catch (err: any) {

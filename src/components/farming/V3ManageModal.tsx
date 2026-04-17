@@ -7,11 +7,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertCircle, CheckCircle, Zap, ArrowDownCircle, Gift, LogOut } from 'lucide-react'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient, useChainId } from 'wagmi'
+import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
 import { useV3Staking } from '@/hooks/v3/useV3Staking'
 import { getV3Config } from '@/config/dex/v3-config'
 import { V3NonfungiblePositionManagerABI } from '@/config/abis'
-import { CHAIN_IDS } from '@/config/chains'
+import { DEFAULT_CHAIN_ID } from '@/config/contracts'
 import type { V3Incentive } from '@/services/dex/v3-staking-types'
 
 interface V3ManageModalProps {
@@ -38,8 +39,17 @@ export default function V3ManageModal({
     onActionComplete,
 }: V3ManageModalProps) {
     const { address } = useAccount()
-    const publicClient = usePublicClient({ chainId: CHAIN_IDS.KALYCHAIN_TESTNET })
-    const { unstakeAndWithdraw, harvestRewards, getPositionReward, service } = useV3Staking()
+    // Resolve chain: Thirdweb in-app wallet > wagmi connected chain > DEFAULT_CHAIN_ID.
+    // Was hardcoded to KALYCHAIN_TESTNET during V3 testing.
+    const thirdwebAccount = useActiveAccount()
+    const thirdwebChain = useActiveWalletChain()
+    const wagmiChainId = useChainId()
+    const chainId =
+        (thirdwebAccount ? thirdwebChain?.id : undefined) ||
+        wagmiChainId ||
+        DEFAULT_CHAIN_ID
+    const publicClient = usePublicClient({ chainId })
+    const { unstakeAndWithdraw, harvestRewards, getPositionReward, service } = useV3Staking(chainId)
 
     const [isProcessing, setIsProcessing] = useState(false)
     const [txStatus, setTxStatus] = useState<'idle' | 'claiming' | 'unstaking' | 'success' | 'error'>('idle')
@@ -69,7 +79,7 @@ export default function V3ManageModal({
         const detectStakedPosition = async () => {
             setIsDetecting(true)
             try {
-                const config = getV3Config(CHAIN_IDS.KALYCHAIN_TESTNET)
+                const config = getV3Config(chainId)
                 if (!config) return
                 const stakerAddress = config.staker as `0x${string}`
                 const positionManagerAddress = config.positionManager as `0x${string}`
@@ -111,7 +121,7 @@ export default function V3ManageModal({
         }
 
         detectStakedPosition()
-    }, [isOpen, address, publicClient, incentive.key, service, getPositionReward])
+    }, [isOpen, address, publicClient, incentive.key, service, getPositionReward, chainId])
 
     // Fetch pending rewards when we have a token ID
     useEffect(() => {

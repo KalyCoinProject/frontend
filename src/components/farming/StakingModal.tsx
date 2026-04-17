@@ -6,10 +6,12 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { useToast } from '@/components/ui/toast'
 import { X, Plus, AlertCircle, CheckCircle } from 'lucide-react'
 import { StakingModalProps } from '@/types/farming'
 import { formatNumber, formatPercentage, formatTokenAmount } from '@/lib/utils'
 import { useFarmingContracts } from '@/hooks/farming/useFarmingContracts'
+import { usePublicClient } from 'wagmi'
 import { BigNumber, ethers } from 'ethers'
 import TokenPairDisplay from './TokenPairDisplay'
 import { farmingLogger } from '@/lib/logger'
@@ -28,6 +30,8 @@ export default function StakingModal({
   const [error, setError] = useState<string | null>(null)
 
   const { stakeLPTokensWithPermit, stakeLPTokens, approveLPTokens } = useFarmingContracts()
+  const toast = useToast()
+  const publicClient = usePublicClient()
 
   const maxAmount = userLiquidityUnstaked?.toSignificant(6) || '0'
   const isMaxAmount = amount === maxAmount
@@ -88,11 +92,18 @@ export default function StakingModal({
       const approvalHash = await approveLPTokens(lpTokenAddress, stakingRewardAddress, amountBN)
 
       if (!approvalHash) {
-        setError('Approval failed. Please try again.')
+        toast.error('Approval failed', 'Unable to approve LP tokens. Please try again.')
         return
       }
 
-      farmingLogger.debug('✅ Approval successful:', approvalHash)
+      farmingLogger.debug('✅ Approval submitted:', approvalHash)
+
+      // Wait for approval tx receipt before staking — prevents "ds-math-sub-underflow"
+      // when the stake call reads allowance before the approval tx is mined.
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: approvalHash as `0x${string}` })
+        farmingLogger.debug('✅ Approval confirmed on-chain:', approvalHash)
+      }
 
       // Step 2: Stake LP tokens
       farmingLogger.debug('Step 2: Staking LP tokens...')
@@ -115,13 +126,12 @@ export default function StakingModal({
       }
     } catch (err) {
       farmingLogger.error('Staking error:', err)
-      // Since modal is closed, we can't show the error in the modal
-      // Could be improved with toast notifications or other error handling
-      alert(err instanceof Error ? err.message : 'Failed to stake tokens')
+      const message = err instanceof Error ? err.message : 'Failed to stake tokens'
+      toast.error('Staking failed', message)
     } finally {
       setIsStaking(false)
     }
-  }, [amount, stakingInfo, stakeLPTokens, approveLPTokens, validateAmount, onDismiss, onSuccess])
+  }, [amount, stakingInfo, stakeLPTokens, approveLPTokens, validateAmount, onDismiss, onSuccess, publicClient, toast])
 
   const handleClose = useCallback(() => {
     if (!isStaking) {

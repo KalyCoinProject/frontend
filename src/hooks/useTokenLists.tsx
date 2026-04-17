@@ -269,12 +269,14 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
 
       let tokenListTokens: Token[];
 
-      // For KalyChain, use local token list directly (no network calls needed)
+      // For KalyChain, use local token list directly (no network calls needed).
+      // Defensively filter by token.chainId — the local lists have historically
+      // contained stray entries for the other network.
       if (chainId === CHAIN_IDS.KALYCHAIN) {
-        tokenListTokens = [...KALYCHAIN_TOKENS];
+        tokenListTokens = KALYCHAIN_TOKENS.filter(t => t.chainId === CHAIN_IDS.KALYCHAIN);
         logger.debug(`Using local KalyChain token list: ${tokenListTokens.length} tokens`);
       } else if (chainId === CHAIN_IDS.KALYCHAIN_TESTNET) {
-        tokenListTokens = [...KALYCHAIN_TESTNET_TOKENS];
+        tokenListTokens = KALYCHAIN_TESTNET_TOKENS.filter(t => t.chainId === CHAIN_IDS.KALYCHAIN_TESTNET);
         logger.debug(`Using local KalyChain Testnet token list: ${tokenListTokens.length} tokens`);
       } else {
         // For other chains, fetch from external sources
@@ -317,7 +319,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
       try {
         let fallbackTokens: Token[];
         if (chainId === CHAIN_IDS.KALYCHAIN) {
-          fallbackTokens = [...KALYCHAIN_TOKENS];
+          fallbackTokens = KALYCHAIN_TOKENS.filter(t => t.chainId === CHAIN_IDS.KALYCHAIN);
           logger.warn(`Using local KalyChain tokens as fallback: ${fallbackTokens.length} tokens`);
         } else {
           fallbackTokens = await tokenListService.getTokensForChain(chainId);
