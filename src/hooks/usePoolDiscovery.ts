@@ -45,6 +45,7 @@ export interface PoolData {
   // User position data
   userHasPosition?: boolean;
   userLpBalance?: string;
+  userLpBalanceRaw?: bigint;
   userPoolShare?: string;
   userToken0Amount?: string;
   userToken1Amount?: string;
@@ -181,6 +182,7 @@ export function usePoolDiscovery() {
         ...pool,
         userHasPosition: userPosition?.hasPosition || false,
         userLpBalance: userPosition?.lpTokenBalance || '0',
+        userLpBalanceRaw: userPosition?.lpTokenBalanceRaw,
         userPoolShare: userPosition?.poolShare || '0',
         userToken0Amount,
         userToken1Amount

@@ -11,6 +11,7 @@ import { ArrowDown, Plus, X } from 'lucide-react';
 import { PoolData } from '@/hooks/usePoolDiscovery';
 import { usePools } from '@/hooks/usePools';
 import { useWallet } from '@/hooks/useWallet';
+import { useWalletClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 
 interface TokenIconProps {
@@ -70,6 +71,10 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
   const [isLoading, setIsLoading] = useState(false);
   const { removeLiquidity, loading, error } = usePools();
   const { isConnected } = useWallet();
+  // useWalletClient resolves asynchronously after connection — the underlying
+  // hook in usePools throws "Wallet client not available" if it's still
+  // undefined when the user clicks. Gate the button on it being ready.
+  const { data: walletClient } = useWalletClient();
 
   // Calculate amounts based on percentage
   const calculatedAmounts = useMemo(() => {
@@ -81,7 +86,17 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
       };
     }
 
-    const lpAmount = (parseFloat(pool.userLpBalance) * percentage / 100).toString();
+    // LP amount: use BigInt math against the raw balance to avoid Float64 precision loss.
+    // parseFloat on an 18-decimal LP balance can round upward (e.g. "49.999999999999999"
+    // → 50), which makes us try to transferFrom more LP than the user owns and the
+    // pair's SafeMath underflows with ds-math-sub-underflow.
+    let lpAmount: string;
+    if (pool.userLpBalanceRaw !== undefined) {
+      const liquidityWei = (pool.userLpBalanceRaw * BigInt(percentage)) / 100n;
+      lpAmount = formatUnits(liquidityWei, 18);
+    } else {
+      lpAmount = (parseFloat(pool.userLpBalance) * percentage / 100).toString();
+    }
     const token0Amount = (parseFloat(pool.userToken0Amount) * percentage / 100).toString();
     const token1Amount = (parseFloat(pool.userToken1Amount) * percentage / 100).toString();
 
@@ -273,10 +288,14 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
           {/* Remove Button */}
           <Button
             onClick={handleRemoveLiquidity}
-            disabled={!isConnected || !pool.userHasPosition || isLoading || loading || percentage === 0}
+            disabled={!isConnected || !walletClient || !pool.userHasPosition || isLoading || loading || percentage === 0}
             className="w-full bg-red-600 hover:bg-red-700 text-white"
           >
-            {isLoading || loading ? 'Removing...' : 'Remove Liquidity'}
+            {isLoading || loading
+              ? 'Removing...'
+              : isConnected && !walletClient
+              ? 'Connecting wallet...'
+              : 'Remove Liquidity'}
           </Button>
         </div>
       </DialogContent>

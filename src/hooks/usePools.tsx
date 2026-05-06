@@ -396,8 +396,12 @@ export function usePools() {
       const amountAMin = (amountADesired * BigInt(995)) / BigInt(1000);
       const amountBMin = (amountBDesired * BigInt(995)) / BigInt(1000);
 
-      // Calculate deadline (current time + 20 minutes)
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + (20 * 60));
+      // Anchor deadline to chain time, not the user's clock — local clock skew
+      // (or a wallet RPC pointed at a forward-skewed node) can otherwise produce
+      // a deadline that's already in the past at simulation, surfacing as
+      // KalyswapRouter: EXPIRED before the wallet popup is even shown.
+      const latestBlock = await publicClient.getBlock();
+      const deadline = latestBlock.timestamp + BigInt(30 * 60);
 
       poolLogger.debug('Adding liquidity:', {
         tokenA,
@@ -545,6 +549,13 @@ export function usePools() {
     try {
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
       const wklcAddress = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+      // Subgraph returns lowercased addresses but config returns checksummed.
+      // Normalize for the WKLC equality checks below or KLC pairs silently
+      // get routed through the Token+Token path and the user receives WKLC
+      // instead of native KLC.
+      const wklcLower = wklcAddress.toLowerCase();
+      const tokenALower = tokenA.toLowerCase();
+      const tokenBLower = tokenB.toLowerCase();
 
       poolLogger.debug('Removing liquidity:', {
         tokenA,
@@ -587,14 +598,17 @@ export function usePools() {
       poolLogger.debug('LP tokens approved');
 
       // Step 2: Remove liquidity
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200); // 20 minutes from now
-      const isKLCPair = tokenA === wklcAddress || tokenB === wklcAddress;
+      // Anchor deadline to chain time (see addLiquidity for the rationale).
+      const latestBlock = await publicClient.getBlock();
+      const deadline = latestBlock.timestamp + BigInt(30 * 60);
+      const isKLCPair = tokenALower === wklcLower || tokenBLower === wklcLower;
 
       if (isKLCPair) {
         // Handle KLC pairs (removeLiquidityKLC)
-        const token = tokenA === wklcAddress ? tokenB : tokenA;
-        const tokenAmountMin = tokenA === wklcAddress ? amountBMinBN : amountAMinBN;
-        const klcAmountMin = tokenA === wklcAddress ? amountAMinBN : amountBMinBN;
+        const tokenAIsWklc = tokenALower === wklcLower;
+        const token = tokenAIsWklc ? tokenB : tokenA;
+        const tokenAmountMin = tokenAIsWklc ? amountBMinBN : amountAMinBN;
+        const klcAmountMin = tokenAIsWklc ? amountAMinBN : amountBMinBN;
 
         poolLogger.debug('Removing KLC + Token liquidity...');
         const removeLiquidityHash = await executeContractCall(
