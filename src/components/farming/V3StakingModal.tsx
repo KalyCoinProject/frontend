@@ -9,10 +9,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, CheckCircle, Clock, Zap, Loader2, ChevronDown } from 'lucide-react'
 import { useV3Staking } from '@/hooks/v3/useV3Staking'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient, useChainId } from 'wagmi'
+import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
 import { V3NonfungiblePositionManagerABI } from '@/config/abis'
 import { getV3Config } from '@/config/dex/v3-config'
-import { CHAIN_IDS } from '@/config/chains'
+import { DEFAULT_CHAIN_ID } from '@/config/contracts'
 import type { V3Incentive } from '@/services/dex/v3-staking-types'
 
 interface V3Position {
@@ -69,9 +70,18 @@ export default function V3StakingModal({
     const [isLoadingPositions, setIsLoadingPositions] = useState(false)
     const [positionError, setPositionError] = useState<string | null>(null)
 
-    const { depositAndStake } = useV3Staking()
+    // Resolve chain: Thirdweb in-app wallet > wagmi connected chain > DEFAULT_CHAIN_ID.
+    // Was hardcoded to KALYCHAIN_TESTNET during V3 testing.
+    const thirdwebAccount = useActiveAccount()
+    const thirdwebChain = useActiveWalletChain()
+    const wagmiChainId = useChainId()
+    const chainId =
+        (thirdwebAccount ? thirdwebChain?.id : undefined) ||
+        wagmiChainId ||
+        DEFAULT_CHAIN_ID
+    const { depositAndStake } = useV3Staking(chainId)
     const { address } = useAccount()
-    const publicClient = usePublicClient({ chainId: CHAIN_IDS.KALYCHAIN_TESTNET })
+    const publicClient = usePublicClient({ chainId })
 
     const token0Symbol = incentive.poolToken0Symbol || 'Token0'
     const token1Symbol = incentive.poolToken1Symbol || 'Token1'
@@ -94,7 +104,7 @@ export default function V3StakingModal({
             setPositions([])
 
             try {
-                const config = getV3Config(CHAIN_IDS.KALYCHAIN_TESTNET)
+                const config = getV3Config(chainId)
                 if (!config) return
                 const positionManagerAddress = config.positionManager as `0x${string}`
 
@@ -178,7 +188,7 @@ export default function V3StakingModal({
         fetchPositions()
 
         return () => { cancelled = true }
-    }, [isOpen, address, publicClient])
+    }, [isOpen, address, publicClient, chainId])
 
     // Check if a position matches the incentive's pool (by fee tier)
     const isPoolMatch = useCallback((pos: V3Position): boolean => {

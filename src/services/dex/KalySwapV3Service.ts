@@ -12,7 +12,7 @@ import { Token, SwapParams } from '@/config/dex/types';
 import { V3_FEE_TIERS, V3_DEFAULT_FEE_TIER } from '@/config/dex/v3-constants';
 import type { PublicClient, WalletClient } from 'viem';
 import { parseUnits, formatUnits, encodeFunctionData, createPublicClient, http } from 'viem';
-import { getRpcUrl, kalychain, kalychainTestnet } from '@/config/chains';
+import { getChainTransport, kalychain, kalychainTestnet } from '@/config/chains';
 import { dexLogger as logger } from '@/lib/logger';
 
 /**
@@ -21,7 +21,7 @@ import { dexLogger as logger } from '@/lib/logger';
 export class KalySwapV3Service extends BaseV3Service {
     private chainId: number;
 
-    constructor(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
+    constructor(chainId: number = CHAIN_IDS.KALYCHAIN) {
         const config = getV3Config(chainId);
         if (!config) throw new Error('V3 not available on this chain');
         super(config);
@@ -50,13 +50,14 @@ export class KalySwapV3Service extends BaseV3Service {
                 slippage: params.slippageTolerance,
             });
 
-            // Create a robust public client for reading state
-            const rpcUrl = getRpcUrl(this.chainId);
+            // Create a robust public client for reading state.
+            // Uses fallback transport so we auto-rotate to rpc2 when the
+            // primary drops.
             const chain = this.chainId === CHAIN_IDS.KALYCHAIN_TESTNET ? kalychainTestnet : kalychain;
 
             const publicClient = createPublicClient({
                 chain,
-                transport: http(rpcUrl)
+                transport: getChainTransport(this.chainId),
             });
 
             // Use findBestRoute to find the optimal path (direct or multi-hop)
@@ -293,7 +294,7 @@ export class KalySwapV3Service extends BaseV3Service {
 // Export singleton factory with caching by chainId
 const v3ServiceInstances: Map<number, KalySwapV3Service> = new Map();
 
-export function getKalySwapV3Service(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): KalySwapV3Service | null {
+export function getKalySwapV3Service(chainId: number = CHAIN_IDS.KALYCHAIN): KalySwapV3Service | null {
     // V3 is only available on KalyChain mainnet and testnet
     const config = getV3Config(chainId);
     if (!config) return null;

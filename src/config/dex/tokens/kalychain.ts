@@ -116,23 +116,8 @@ export const KALYCHAIN_TOKENS: Token[] = [
     symbol: 'KUSD',
     logoURI: '/tokens/kusd.png'
   },
-  // Testnet Tokens
-  {
-    chainId: CHAIN_IDS.KALYCHAIN_TESTNET,
-    address: '0x5850B207c470C1F2F4c1ca6B1f624d4C28B729a1',
-    decimals: 18,
-    name: 'Test KalySwap',
-    symbol: 'tKLS',
-    logoURI: '/tokens/unknown.png'
-  },
-  {
-    chainId: CHAIN_IDS.KALYCHAIN_TESTNET,
-    address: '0xA510Df56F2aa3f7241da94F2cF053C1bf02E1168',
-    decimals: 18,
-    name: 'Binance USD',
-    symbol: 'BUSD',
-    logoURI: '/tokens/busd.png'
-  }
+  // Note: testnet tokens (tKLS, BUSD) live in ./kalychain-testnet.ts — do NOT
+  // mix them into this mainnet list; useTokenLists selects by chainId.
 ];
 
 // Helper function to get token by address

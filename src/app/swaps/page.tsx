@@ -42,6 +42,7 @@ import { formatTokenPrice, formatPriceChange, usePairMarketStats } from '@/hooks
 import { useWallet } from '@/hooks/useWallet';
 import { PriceDataProvider } from '@/contexts/PriceDataContext';
 import { useChainId } from 'wagmi';
+import { useActiveAccount } from 'thirdweb/react';
 import { useHydration } from '@/hooks/useHydration';
 import { Token } from '@/config/dex/types';
 import { logger } from '@/lib/logger';
@@ -690,6 +691,10 @@ function SwapsPageContent({
   // Get protocol version
   const { protocolVersion } = useProtocolVersion();
 
+  // Thirdweb in-app wallet (used to distinguish "connected via in-app" from
+  // "no wallet at all" so the Send tab can show an accurate empty state).
+  const thirdwebAccount = useActiveAccount();
+
   // Get current chain ID from wallet with error handling
   let wagmiChainId: number | undefined;
   try {
@@ -973,8 +978,21 @@ function SwapsPageContent({
                       {!activeWallet ? (
                         <div className="text-center py-8 text-gray-500">
                           <Send className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p className="font-medium">No Wallet Connected</p>
-                          <p className="text-sm">Please log in to send tokens</p>
+                          {thirdwebAccount ? (
+                            <>
+                              <p className="font-medium">Send from In-App Wallet</p>
+                              <p className="text-sm">
+                                Use your wallet icon in the top right to send tokens from your
+                                in-app wallet. This tab is for users with the legacy internal
+                                wallet only.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium">No Wallet Connected</p>
+                              <p className="text-sm">Please log in to send tokens</p>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <>

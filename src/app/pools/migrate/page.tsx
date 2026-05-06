@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePools } from '@/hooks/usePools';
 import { useAccount } from 'wagmi';
+import { useToast } from '@/components/ui/toast';
+import { useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getKalyChainTokenByAddress } from '@/config/dex/tokens/kalychain';
@@ -29,16 +32,37 @@ interface V2Position {
 export default function MigrateWithFallback() {
     const { getUserPools } = usePools();
     const { address, isConnected } = useAccount();
-    const [positions, setPositions] = useState<V2Position[]>([]);
+    const [rawPositions, setRawPositions] = useState<V2Position[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedPosition, setSelectedPosition] = useState<V2Position | null>(null);
+    // Pair addresses the user just migrated in this session. The subgraph
+    // lags the chain by several seconds so `getUserPools` can still return
+    // the (now-zero) position right after a successful migration. Hide it
+    // client-side so the user doesn't see their already-migrated pair as if
+    // it still needs action.
+    const [recentlyMigrated, setRecentlyMigrated] = useState<Set<string>>(() => new Set());
+    const router = useRouter();
+    const toast = useToast();
+    const { setProtocolVersion } = useProtocolVersion();
+
+    // Drop any position whose LP balance is now 0 or that was migrated in
+    // this session but hasn't cleared from the subgraph yet.
+    const positions = useMemo(
+        () =>
+            rawPositions.filter((p) => {
+                if (recentlyMigrated.has(p.pair.id.toLowerCase())) return false;
+                const bal = parseFloat(p.liquidityTokenBalance || '0');
+                return Number.isFinite(bal) && bal > 0;
+            }),
+        [rawPositions, recentlyMigrated],
+    );
 
     useEffect(() => {
         if (isConnected && address) {
             setLoading(true);
             getUserPools(address)
                 .then((data: any) => {
-                    setPositions(data);
+                    setRawPositions(data);
                 })
                 .catch(err => console.error(err))
                 .finally(() => setLoading(false));
@@ -46,12 +70,58 @@ export default function MigrateWithFallback() {
     }, [isConnected, address, getUserPools]);
 
     const handleSuccess = () => {
-        // Refresh positions
-        if (address) {
-            getUserPools(address).then((data: any) => setPositions(data));
+        // Remember the migrated pair so we hide it immediately, even if the
+        // subgraph hasn't caught up yet.
+        const justMigrated = selectedPosition?.pair?.id?.toLowerCase();
+        if (justMigrated) {
+            setRecentlyMigrated((prev) => {
+                const next = new Set(prev);
+                next.add(justMigrated);
+                return next;
+            });
         }
+        toast.success(
+            'Migration complete',
+            'Your V2 liquidity is now a V3 position. Redirecting to your V3 positions…',
+        );
+        // Switch the pools view to V3 so the user lands on the page showing
+        // their newly-minted V3 NFT position, not the V2 list.
+        setProtocolVersion('v3');
         setSelectedPosition(null);
+        // Brief pause so the toast is visible before we navigate.
+        setTimeout(() => router.push('/pools/browse'), 900);
     };
+
+    // Helper to construct Token objects for V3Migration
+    const getTokenObject = (t: { id: string; symbol: string }): Token => {
+        const known = getKalyChainTokenByAddress(t.id);
+        if (known) return known;
+
+        return {
+            chainId: 1, // Fallback
+            address: t.id,
+            decimals: 18, // Fallback
+            name: t.symbol,
+            symbol: t.symbol,
+            logoURI: '',
+        };
+    };
+
+    // Memoize tokens to prevent infinite loops in V3Migration hook dependencies.
+    // IMPORTANT: these useMemo calls MUST run before the early `!isConnected`
+    // return below. Hooks cannot be called conditionally — when wagmi transitions
+    // from disconnected → connected mid-session (e.g., after the Thirdweb→wagmi
+    // bridge retries a failed initial sync), the next render would otherwise
+    // invoke more hooks than the previous one and crash React.
+    const selectedToken0 = useMemo(() => {
+        if (!selectedPosition) return null;
+        return getTokenObject(selectedPosition.pair.token0);
+    }, [selectedPosition]);
+
+    const selectedToken1 = useMemo(() => {
+        if (!selectedPosition) return null;
+        return getTokenObject(selectedPosition.pair.token1);
+    }, [selectedPosition]);
 
     if (!isConnected) {
         return (
@@ -74,32 +144,6 @@ export default function MigrateWithFallback() {
             </MainLayout>
         );
     }
-
-    // Helper to construct Token objects for V3Migration
-    const getTokenObject = (t: { id: string; symbol: string }): Token => {
-        const known = getKalyChainTokenByAddress(t.id);
-        if (known) return known;
-
-        return {
-            chainId: 1, // Fallback
-            address: t.id,
-            decimals: 18, // Fallback
-            name: t.symbol,
-            symbol: t.symbol,
-            logoURI: '',
-        };
-    };
-
-    // Memoize tokens to prevent infinite loops in V3Migration hook dependencies
-    const selectedToken0 = useMemo(() => {
-        if (!selectedPosition) return null;
-        return getTokenObject(selectedPosition.pair.token0);
-    }, [selectedPosition]);
-
-    const selectedToken1 = useMemo(() => {
-        if (!selectedPosition) return null;
-        return getTokenObject(selectedPosition.pair.token1);
-    }, [selectedPosition]);
 
     return (
         <MainLayout>
@@ -152,7 +196,7 @@ export default function MigrateWithFallback() {
                                             onClick={() => {
                                                 setLoading(true);
                                                 if (address) {
-                                                    getUserPools(address).then((data: any) => setPositions(data)).finally(() => setLoading(false));
+                                                    getUserPools(address).then((data: any) => setRawPositions(data)).finally(() => setLoading(false));
                                                 }
                                             }}
                                         >

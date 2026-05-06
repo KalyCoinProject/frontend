@@ -3,7 +3,7 @@
  * Handles incentive creation, NFT deposit/stake, unstake/withdraw, and reward claims
  */
 
-import { CHAIN_IDS, getRpcUrl, kalychain, kalychainTestnet } from '@/config/chains';
+import { CHAIN_IDS, getChainTransport, kalychain, kalychainTestnet } from '@/config/chains';
 import { getV3Config, V3DexConfig } from '@/config/dex/v3-config';
 import { V3StakerABI, V3NonfungiblePositionManagerABI, ERC20ABI } from '@/config/abis';
 import { dexLogger as logger } from '@/lib/logger';
@@ -26,7 +26,7 @@ export class V3StakingService {
     private stakerABI: any[];
     private positionManagerABI: any[];
 
-    constructor(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET) {
+    constructor(chainId: number = CHAIN_IDS.KALYCHAIN) {
         const config = getV3Config(chainId);
         if (!config) throw new Error('V3 not available on this chain');
         this.config = config;
@@ -36,11 +36,10 @@ export class V3StakingService {
         this.positionManagerABI = V3NonfungiblePositionManagerABI;
 
         const chain = chainId === CHAIN_IDS.KALYCHAIN_TESTNET ? kalychainTestnet : kalychain;
-        const rpcUrl = getRpcUrl(chainId);
 
         this.publicClient = createPublicClient({
             chain,
-            transport: http(rpcUrl),
+            transport: getChainTransport(chainId),
         }) as PublicClient;
     }
 
@@ -385,7 +384,7 @@ export class V3StakingService {
 // Singleton factory with caching by chainId
 const stakingServiceInstances: Map<number, V3StakingService> = new Map();
 
-export function getV3StakingService(chainId: number = CHAIN_IDS.KALYCHAIN_TESTNET): V3StakingService {
+export function getV3StakingService(chainId: number = CHAIN_IDS.KALYCHAIN): V3StakingService {
     if (!stakingServiceInstances.has(chainId)) {
         stakingServiceInstances.set(chainId, new V3StakingService(chainId));
     }

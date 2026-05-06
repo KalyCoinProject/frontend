@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { createPublicClient, http } from 'viem';
 import { getKalySwapV3Service } from '../KalySwapV3Service';
-import { CHAIN_IDS } from '@/config/chains';
+import { CHAIN_IDS, kalychainTestnet } from '@/config/chains';
 import { Token } from '@/config/dex/types';
 
 // User provided test tokens
@@ -32,14 +32,10 @@ describe('KalySwap V3 Integration (Testnet)', () => {
     const chainId = CHAIN_IDS.KALYCHAIN_TESTNET;
     const service = getKalySwapV3Service(chainId)!;
 
-    // Create actual client for testnet
+    // Create actual client for testnet using the centralized chain definition so
+    // the generic PublicClient<Transport, Chain> type matches what the service expects.
     const publicClient = createPublicClient({
-        chain: {
-            id: chainId,
-            name: 'KalyChain Testnet',
-            nativeCurrency: { name: 'Kaly', symbol: 'KLC', decimals: 18 },
-            rpcUrls: { default: { http: ['https://testnetrpc.kalychain.io/rpc'] } }
-        } as any,
+        chain: kalychainTestnet,
         transport: http('https://testnetrpc.kalychain.io/rpc')
     });
 

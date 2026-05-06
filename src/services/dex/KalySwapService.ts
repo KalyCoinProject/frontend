@@ -1,4 +1,4 @@
-import { CHAIN_IDS } from '@/config/chains';
+import { CHAIN_IDS, getChainTransport } from '@/config/chains';
 import { dexLogger } from '@/lib/logger';
 // KalySwap DEX service implementation
 // Handles all KalySwap-specific operations on KalyChain
@@ -235,10 +235,11 @@ export class KalySwapService extends BaseDexService {
         return 0;
       }
 
-      // Create a public client for reading data
+      // Create a public client for reading data. Uses fallback transport so
+      // we auto-rotate to rpc2 when the primary drops.
       const publicClient = createPublicClient({
         chain: kalychain,
-        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+        transport: getChainTransport(this.getChainId()),
       });
 
       const pairInfo = await this.getPairInfo(klcToken, usdtToken, publicClient);
@@ -267,10 +268,11 @@ export class KalySwapService extends BaseDexService {
         return 0;
       }
 
-      // Create a public client for reading data
+      // Create a public client for reading data. Uses fallback transport so
+      // we auto-rotate to rpc2 when the primary drops.
       const publicClient = createPublicClient({
         chain: kalychain,
-        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+        transport: getChainTransport(this.getChainId()),
       });
 
       const pairInfo = await this.getPairInfo(kswapToken, klcToken, publicClient);

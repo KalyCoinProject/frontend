@@ -43,10 +43,10 @@ export const kalychain = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.kalychain.io/rpc'],
+      http: ['https://rpc.kalychain.io/rpc', 'https://rpc2.kalychain.io/rpc'],
     },
     public: {
-      http: ['https://rpc.kalychain.io/rpc'],
+      http: ['https://rpc.kalychain.io/rpc', 'https://rpc2.kalychain.io/rpc'],
     },
   },
   blockExplorers: {
@@ -204,6 +204,31 @@ export const RPC_URLS: Record<number, string> = {
   [CHAIN_IDS.CLISHA]: process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
 };
 
+/**
+ * Fallback RPC URLs per chain. Used by viem's `fallback()` transport so the
+ * client auto-rotates to a healthy endpoint when the primary is dropping
+ * requests (common on shared public RPC during peak load). Order matters:
+ * the first entry is tried first, the next only if it fails.
+ */
+export const RPC_URLS_ALL: Record<number, string[]> = {
+  [CHAIN_IDS.KALYCHAIN]: [
+    process.env.NEXT_PUBLIC_KALYCHAIN_RPC_URL || 'https://rpc.kalychain.io/rpc',
+    'https://rpc2.kalychain.io/rpc',
+  ],
+  [CHAIN_IDS.KALYCHAIN_TESTNET]: [
+    process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnetrpc.kalychain.io/rpc',
+  ],
+  [CHAIN_IDS.ARBITRUM]: [
+    process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
+  ],
+  [CHAIN_IDS.BSC]: [
+    process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
+  ],
+  [CHAIN_IDS.CLISHA]: [
+    process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
+  ],
+};
+
 // ============================================================================
 // CHAIN METADATA - Extended info for UI display
 // ============================================================================
@@ -273,6 +298,34 @@ export const CHAIN_METADATA: Record<number, ChainMetadata> = {
 /** Get RPC URL for a chain (with env override support) */
 export function getRpcUrl(chainId: number): string {
   return RPC_URLS[chainId] || '';
+}
+
+/** Get all RPC URLs (primary + fallbacks) for a chain. */
+export function getRpcUrls(chainId: number): string[] {
+  return RPC_URLS_ALL[chainId] || [RPC_URLS[chainId]].filter(Boolean);
+}
+
+/**
+ * Build a viem Transport for a chain using all known RPC URLs. Uses
+ * `fallback()` when more than one URL is configured so a flaky primary
+ * (rpc.kalychain.io under load) transparently moves to the backup
+ * (rpc2.kalychain.io). Safe to call from service constructors.
+ *
+ * Timings are tuned for fail-fast over a stuck primary: 5s timeout,
+ * 1 retry on the same URL, then fallback to the next URL. This keeps
+ * worst-case per-call latency around 11s per URL instead of 30s+.
+ */
+export function getChainTransport(chainId: number) {
+  // Lazy-import viem so this module stays small when not needed.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { http, fallback } = require('viem') as typeof import('viem');
+  const urls = getRpcUrls(chainId);
+  const httpTransports = urls.map((url) =>
+    http(url, { batch: true, retryCount: 1, retryDelay: 200, timeout: 5_000 }),
+  );
+  return httpTransports.length > 1
+    ? fallback(httpTransports, { rank: false })
+    : httpTransports[0];
 }
 
 /** Get chain metadata for UI display */

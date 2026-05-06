@@ -23,6 +23,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 
+import { useActiveAccount } from 'thirdweb/react';
+
 import { useBridgeContext } from '@/hooks/bridge/useBridgeContext';
 import { useBridgeTransfer } from '@/hooks/bridge/useBridgeTransfer';
 import { useBridgeBalances } from '@/hooks/bridge/useBridgeBalances';
@@ -51,6 +53,7 @@ export type BridgeFormValues = z.infer<typeof bridgeFormSchema>;
 export function BridgeForm() {
   const [isReview, setIsReview] = useState(false);
   const { address: account } = useWallet();
+  const thirdwebAccount = useActiveAccount();
   const { getLatestTransfer } = useTransferStore();
   const latestTransfer = getLatestTransfer();
 
@@ -160,10 +163,13 @@ export function BridgeForm() {
   };
 
   // Handle self recipient
+  // Prefer the Thirdweb in-app wallet address (the user's KalySwap identity) over
+  // any wagmi-visible account, which may be a background-auto-connected MetaMask.
   const handleSelfRecipient = () => {
-    if (account) {
-      form.setValue('recipient', account);
-      setRecipientAddress(account);
+    const selfAddress = thirdwebAccount?.address ?? account;
+    if (selfAddress) {
+      form.setValue('recipient', selfAddress);
+      setRecipientAddress(selfAddress);
     }
   };
 

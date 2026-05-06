@@ -7,7 +7,7 @@ import './pools.css';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Info, Search } from 'lucide-react';
+import { ArrowLeft, Info, Search, ArrowUpRight } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TokenSelector from '@/components/pools/TokenSelector';
 import LiquidityForm from '@/components/pools/LiquidityForm';
@@ -126,15 +126,26 @@ export default function PoolsPage() {
                 </div>
               </div>
 
-              <Button
-                variant="outline"
-                onClick={() => router.push('/pools/browse')}
-                className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50 ml-12 sm:ml-0"
-                style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
-              >
-                <Search className="h-4 w-4" />
-                <span>Browse Pools</span>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 ml-12 sm:ml-0">
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/pools/browse')}
+                  className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50"
+                  style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Browse Pools</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/pools/migrate')}
+                  className="flex items-center space-x-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                  style={{ borderColor: 'rgba(245, 158, 11, 0.35)' }}
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  <span>Migrate V2 → V3</span>
+                </Button>
+              </div>
             </div>
 
             {/* Breadcrumb */}

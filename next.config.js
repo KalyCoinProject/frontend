@@ -11,7 +11,7 @@ const nextConfig = {
       return [
         {
           source: '/api/:path*',
-          destination: 'http://localhost:3000/api/:path*', // Proxy to backend
+          destination: 'https://api.kalyswap.localhost/api/:path*', // Proxy to backend (via portless)
         },
         {
           source: '/subgraphs/:path*',
