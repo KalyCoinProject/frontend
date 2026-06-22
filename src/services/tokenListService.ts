@@ -30,6 +30,28 @@ export interface TokenListConfig {
   enabled: boolean;
 }
 
+/**
+ * Normalize an upstream token list into the Uniswap TokenList shape.
+ * Some official sources (e.g. Camelot's arbitrum-one.json) publish a bare
+ * array of tokens rather than a wrapped { name, version, tokens } object.
+ */
+export function normalizeToTokenList(raw: unknown): TokenList | null {
+  if (Array.isArray(raw)) {
+    return {
+      name: 'Imported List',
+      version: { major: 1, minor: 0, patch: 0 },
+      timestamp: new Date(0).toISOString(),
+      logoURI: '',
+      keywords: [],
+      tokens: raw as Token[],
+    };
+  }
+  if (raw && typeof raw === 'object' && Array.isArray((raw as TokenList).tokens)) {
+    return raw as TokenList;
+  }
+  return null;
+}
+
 // Cache interface
 interface CacheEntry {
   data: TokenList;
@@ -78,7 +100,7 @@ class TokenListService {
 
       dexLogger.debug(`🔍 Resolved API URL: ${apiUrl}`);
 
-      const tokenList = await fetchJSON<TokenList>(apiUrl, {
+      const raw = await fetchJSON<unknown>(apiUrl, {
         timeout: this.REQUEST_TIMEOUT,
         retries: this.MAX_RETRIES,
         headers: {
@@ -87,8 +109,10 @@ class TokenListService {
         }
       });
 
+      const tokenList = normalizeToTokenList(raw);
+
       // Validate token list schema
-      if (this.validateTokenList(tokenList)) {
+      if (tokenList && this.validateTokenList(tokenList)) {
         // Cache the result
         this.cache.set(url, { 
           data: tokenList, 
