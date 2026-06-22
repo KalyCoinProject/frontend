@@ -137,6 +137,7 @@ export function useThirdwebWagmiBridge() {
     __bridgeThrottledLog({
       wagmiConnected,
       wagmiAddress,
+      thirdwebHasAccount: !!thirdwebAccount?.address,
       isSyncing: isSyncing.current,
       lastSyncedAddress: lastSyncedAddress.current,
     })
@@ -258,6 +259,11 @@ export function useThirdwebWagmiBridge() {
 
     // Case 2: Thirdweb disconnected — unsync from Wagmi
     if (!thirdwebAccount && lastSyncedAddress.current) {
+      walletLogger.warn('[bridge-debug] CASE2 thirdwebAccount went NULL while synced — about to disconnect wagmi', {
+        wagmiConnected,
+        wagmiConnector: wagmiConnector?.id,
+        lastSynced: lastSyncedAddress.current,
+      })
       if (wagmiConnected && wagmiConnector?.id === 'thirdweb-inapp') {
         wagmiDisconnect()
         lastSyncedAddress.current = null
