@@ -93,14 +93,6 @@ const COMMON_TOKENS: Token[] = [
     name: 'Polygon Token',
     symbol: 'POL',
     logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac/logo_24.png'
-  },
-  {
-    chainId: CHAIN_IDS.KALYCHAIN,
-    address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-    decimals: 18,
-    name: 'Clisha Coin',
-    symbol: 'CLISHA',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C/logo_24.png'
   }
 ];
 

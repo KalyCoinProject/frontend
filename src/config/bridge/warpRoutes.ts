@@ -359,31 +359,6 @@ export const warpRouteConfigs: WarpCoreConfig = {
       symbol: 'WBTC',
       logoURI: '/logos/wbtc.svg',
     },
-    // CLISHA - Native on Clisha Chain, Synthetic on KalyChain
-    {
-      addressOrDenom: '0xe6828eF9923943899199dc4464B791499025d5aC',
-      chainName: 'clisha',
-      connections: [
-        { token: 'ethereum|kalychain|0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C' },
-      ],
-      decimals: 18,
-      name: 'Clisha Coin',
-      standard: TokenStandard.EvmHypNative,
-      symbol: 'CLISHA',
-      logoURI: '/logos/clisha.svg',
-    },
-    {
-      addressOrDenom: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-      chainName: 'kalychain',
-      connections: [
-        { token: 'ethereum|clisha|0xe6828eF9923943899199dc4464B791499025d5aC' },
-      ],
-      decimals: 18,
-      name: 'Clisha Coin',
-      standard: TokenStandard.EvmHypSynthetic,
-      symbol: 'CLISHA',
-      logoURI: '/logos/clisha.svg',
-    },
   ],
   options: {},
 };

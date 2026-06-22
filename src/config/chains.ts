@@ -21,7 +21,6 @@ import { arbitrum, bsc } from 'viem/chains'
 export const CHAIN_IDS = {
   KALYCHAIN: 3888,
   KALYCHAIN_TESTNET: 3889,
-  CLISHA: 3890,
   ARBITRUM: 42161,
   BSC: 56,
 } as const;
@@ -94,47 +93,12 @@ export const kalychainTestnet = defineChain({
   iconUrl: '/tokens/klc.png',
 })
 
-// Clisha Mainnet Configuration
-export const clisha = defineChain({
-  id: 3890,
-  name: 'Clisha',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'clisha',
-    symbol: 'CLISHA',
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://rpc.clishachain.com/rpc'],
-    },
-    public: {
-      http: ['https://rpc.clishachain.com/rpc'],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'ClishaExplorer',
-      url: 'https://clishascan.com',
-    },
-  },
-  contracts: {
-    // Add multicall contract if available
-    // multicall3: {
-    //   address: '0x...',
-    //   blockCreated: 0,
-    // },
-  },
-  // Add custom icon for Rainbow Kit
-  iconUrl: '/icons/clisha.png',
-})
-
 // Bridge-supported chains - Required for bridge functionality
 export const supportedChains = [
   kalychain,
   kalychainTestnet, // Enabled for V3 testing
   arbitrum,
   bsc,
-  clisha,
 ] as const
 
 // Helper function to get chain by ID
@@ -173,13 +137,6 @@ export const CHAIN_CONFIG = {
     faucetUrl: null,
     bridgeUrl: null,
   },
-  [clisha.id]: {
-    name: 'Clisha',
-    shortName: 'CLISHA',
-    isTestnet: false,
-    faucetUrl: null,
-    bridgeUrl: null,
-  },
   [kalychainTestnet.id]: {
     name: 'KalyChain Testnet',
     shortName: 'KLC-T',
@@ -201,7 +158,6 @@ export const RPC_URLS: Record<number, string> = {
   [CHAIN_IDS.KALYCHAIN_TESTNET]: process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnetrpc.kalychain.io/rpc',
   [CHAIN_IDS.ARBITRUM]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
   [CHAIN_IDS.BSC]: process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
-  [CHAIN_IDS.CLISHA]: process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
 };
 
 /**
@@ -223,9 +179,6 @@ export const RPC_URLS_ALL: Record<number, string[]> = {
   ],
   [CHAIN_IDS.BSC]: [
     process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
-  ],
-  [CHAIN_IDS.CLISHA]: [
-    process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
   ],
 };
 
@@ -279,14 +232,6 @@ export const CHAIN_METADATA: Record<number, ChainMetadata> = {
     logo: '/tokens/bnb.png',
     explorer: 'https://bscscan.com',
     explorerApi: 'https://api.bscscan.com/api',
-    isTestnet: false,
-  },
-  [CHAIN_IDS.CLISHA]: {
-    name: 'Clisha',
-    shortName: 'CLISHA',
-    symbol: 'CLISHA',
-    logo: '/icons/clisha.png',
-    explorer: 'https://clishascan.com',
     isTestnet: false,
   },
 };

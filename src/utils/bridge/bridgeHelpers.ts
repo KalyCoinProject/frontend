@@ -70,7 +70,6 @@ export const bridgeHelpers = {
       kalychain: 'KalyChain',
       arbitrum: 'Arbitrum One',
       bsc: 'BNB Smart Chain',
-      clisha: 'Clisha',
     };
     return chainDisplayNames[chainName] || chainName;
   },
@@ -99,7 +98,6 @@ export const bridgeHelpers = {
       kalychain: 'https://kalyscan.io/tx/',
       arbitrum: 'https://arbiscan.io/tx/',
       bsc: 'https://bscscan.com/tx/',
-      clisha: 'https://clishascan.com/tx/',
     };
     const baseUrl = explorerUrls[chainName];
     return baseUrl ? `${baseUrl}${txHash}` : '';
@@ -118,10 +116,6 @@ export const bridgeHelpers = {
       // BNB addresses
       '0x8d0e034611B691683377d2fC9958122a30F7DAab': 'BNB', // BSC
       '0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb': 'BNB', // KalyChain
-
-      // CLISHA addresses
-      '0xe6828eF9923943899199dc4464B791499025d5aC': 'CLISHA', // Clisha Chain
-      '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C': 'CLISHA', // KalyChain
 
       // DAI addresses
       '0x1e59F72de6c00c456f7F42708FE8b6b0782E84C6': 'DAI', // Arbitrum
