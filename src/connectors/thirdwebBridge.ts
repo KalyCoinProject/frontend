@@ -122,6 +122,15 @@ export function useThirdwebWagmiBridge() {
   // would leave wagmi permanently disconnected for the page until full reload.
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const retryAttemptRef = useRef(0)
+  // Debounced-disconnect timer. thirdweb's useActiveAccount() can transiently
+  // read null for a render or two while it revalidates its session (slow/flaky
+  // network, many open tabs). Disconnecting wagmi on that transient null drops
+  // the wallet mid-transaction (e.g. during a V2->V3 migration). We wait and
+  // re-check before actually disconnecting.
+  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Latest thirdweb account address, readable from inside the debounced timer
+  // (the timer closure would otherwise see a stale value).
+  const thirdwebAccountRef = useRef<string | null>(null)
 
   // Helper to create/update the EIP1193 provider for the current chain
   function updateProvider(wallet: any, chain: ThirdwebChain) {
@@ -137,14 +146,24 @@ export function useThirdwebWagmiBridge() {
     __bridgeThrottledLog({
       wagmiConnected,
       wagmiAddress,
+      thirdwebHasAccount: !!thirdwebAccount?.address,
       isSyncing: isSyncing.current,
       lastSyncedAddress: lastSyncedAddress.current,
     })
+
+    // Always keep the latest account visible to the debounced-disconnect timer.
+    thirdwebAccountRef.current = thirdwebAccount?.address?.toLowerCase() ?? null
 
     if (isSyncing.current) return
 
     // Case 1: Thirdweb wallet connected — sync to Wagmi
     if (thirdwebWallet && thirdwebAccount?.address) {
+      // Account is present again — cancel any pending debounced disconnect so a
+      // transient null that already resolved never tears down the session.
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current)
+        disconnectTimerRef.current = null
+      }
       const twAddress = thirdwebAccount.address.toLowerCase()
       const twChainId = thirdwebChain?.id || twKalychain.id
 
@@ -256,13 +275,31 @@ export function useThirdwebWagmiBridge() {
       attemptConnect()
     }
 
-    // Case 2: Thirdweb disconnected — unsync from Wagmi
+    // Case 2: Thirdweb account read as null while we hold a synced session.
+    // This is frequently a TRANSIENT blip (session revalidation under slow
+    // network / many open tabs), not a real disconnect. Debounce it: wait, then
+    // disconnect only if the account is STILL gone. A genuine disconnect still
+    // happens (after the delay); a blip no longer nukes the wallet mid-tx.
     if (!thirdwebAccount && lastSyncedAddress.current) {
-      if (wagmiConnected && wagmiConnector?.id === 'thirdweb-inapp') {
-        wagmiDisconnect()
-        lastSyncedAddress.current = null
-        lastSyncedChainId.current = null
-        providerRef.current = null
+      if (!disconnectTimerRef.current) {
+        const connectorId = wagmiConnector?.id
+        disconnectTimerRef.current = setTimeout(() => {
+          disconnectTimerRef.current = null
+          // Re-check the LATEST account, not the stale closure value.
+          if (thirdwebAccountRef.current || !lastSyncedAddress.current) {
+            walletLogger.debug('[bridge-debug] CASE2 disconnect cancelled — thirdweb account recovered')
+            return
+          }
+          walletLogger.warn('[bridge-debug] CASE2 thirdweb account stayed NULL — disconnecting wagmi')
+          // Only tear down OUR bridged connector — never a directly-connected
+          // injected wallet (MetaMask) the user connected outside the bridge.
+          if (connectorId === 'thirdweb-inapp') {
+            wagmiDisconnect()
+          }
+          lastSyncedAddress.current = null
+          lastSyncedChainId.current = null
+          providerRef.current = null
+        }, 5000)
       }
       // If Thirdweb disconnects mid-retry, drop any pending sync timer.
       if (retryTimerRef.current) {
@@ -288,6 +325,10 @@ export function useThirdwebWagmiBridge() {
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
         retryTimerRef.current = null
+      }
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current)
+        disconnectTimerRef.current = null
       }
     }
   }, [])

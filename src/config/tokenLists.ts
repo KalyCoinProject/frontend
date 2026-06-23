@@ -13,6 +13,7 @@ const TOKEN_LIST_URLS = {
   // External token lists (via backend proxy)
   PANCAKESWAP_EXTENDED: '/api/token-lists/pancakeswap-extended',
   UNISWAP_DEFAULT: '/api/token-lists/uniswap-default',
+  CAMELOT_ARBITRUM: '/api/token-lists/camelot-arbitrum',
 
   // Future token lists (disabled for now)
   KALYSWAP_EXTENDED: '/api/token-lists/kalyswap-extended',
@@ -57,11 +58,11 @@ export const TOKEN_LIST_CONFIGS: Record<number, TokenListConfig[]> = {
     }
   ],
 
-  // Arbitrum (42161) - Use official Uniswap token list
+  // Arbitrum (42161) - Use official Camelot token list
   42161: [
     {
-      name: 'Uniswap Default',
-      url: TOKEN_LIST_URLS.UNISWAP_DEFAULT,
+      name: 'Camelot Arbitrum',
+      url: TOKEN_LIST_URLS.CAMELOT_ARBITRUM,
       priority: 100,
       enabled: true
     }

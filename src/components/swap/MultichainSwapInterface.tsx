@@ -17,6 +17,7 @@ import { swapLogger } from '@/lib/logger';
 
 // Wagmi imports for wallet interaction
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useActiveWalletChain, useActiveWallet } from 'thirdweb/react';
 
 // New multichain DEX service imports
 import { Token, QuoteResult, SwapParams } from '@/services/dex';
@@ -81,6 +82,53 @@ export default function MultichainSwapInterface({
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
+  // The connected wallet's ACTUAL network (e.g. MetaMask), tracked by thirdweb separately from
+  // the swap's network. When a user is connected via MetaMask + the in-app wallet and MetaMask is
+  // on a different network, signing fails — so we warn and block, exactly like the bridge does.
+  const activeWalletChain = useActiveWalletChain();
+  const activeWallet = useActiveWallet();
+  const networkName = (id?: number): string => {
+    switch (id) {
+      case CHAIN_IDS.KALYCHAIN: return 'KalyChain';
+      case CHAIN_IDS.KALYCHAIN_TESTNET: return 'KalyChain Testnet';
+      case 56: return 'BNB Smart Chain';
+      case 42161: return 'Arbitrum One';
+      default: return id ? `chain ${id}` : 'an unsupported network';
+    }
+  };
+
+  // Track MetaMask's (injected provider) LIVE network straight from window.ethereum, updated on
+  // every chainChanged event. wagmi + thirdweb both report a stale chain here, so for an external
+  // wallet this is the ground truth for what network the user will actually sign on.
+  const [injectedChainId, setInjectedChainId] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const eth = (typeof window !== 'undefined')
+      ? (window as unknown as { ethereum?: { request?: (a: { method: string }) => Promise<string>; on?: (e: string, cb: (...a: unknown[]) => void) => void; removeListener?: (e: string, cb: (...a: unknown[]) => void) => void } }).ethereum
+      : undefined;
+    if (!eth?.request) return;
+    const read = () => {
+      eth.request!({ method: 'eth_chainId' })
+        .then((hex) => setInjectedChainId(parseInt(hex, 16)))
+        .catch(() => {});
+    };
+    read();
+    eth.on?.('chainChanged', read);
+    return () => eth.removeListener?.('chainChanged', read);
+  }, []);
+
+  // The wallet's REAL signing network: for an external/injected wallet (MetaMask) use the live
+  // injected chain; for the in-app wallet use thirdweb's tracked chain (no injected provider).
+  const walletId = activeWallet?.id;
+  const isInAppWallet = walletId === 'inApp' || walletId === 'embedded';
+  const walletRealChainId = (!isInAppWallet && injectedChainId) ? injectedChainId : activeWalletChain?.id;
+  const networkMismatch = Boolean(
+    isConnected && walletRealChainId && chainId && walletRealChainId !== chainId
+  );
+
+  // Debug: surfaces every chain source so we can see exactly what's stale.
+  useEffect(() => {
+    console.warn('[swap-network-check]', { uiChain: chainId, thirdwebChain: activeWalletChain?.id, injectedChainId, walletId, walletRealChainId, networkMismatch });
+  }, [chainId, activeWalletChain?.id, injectedChainId, walletId, walletRealChainId, networkMismatch]);
 
   // Debug: Log chain ID changes
   useEffect(() => {
@@ -391,6 +439,14 @@ export default function MultichainSwapInterface({
       return;
     }
 
+    // Bridge-style guard: the wallet is on a different network than this swap — block and tell
+    // the user to switch their wallet (signing on the wrong network is what caused "wrong token /
+    // fee unavailable" in MetaMask).
+    if (networkMismatch) {
+      handleError(new Error(`Your wallet is on ${networkName(walletRealChainId)}. Please switch it to ${networkName(chainId)} to complete this swap.`));
+      return;
+    }
+
     if (!swapState.fromToken || !swapState.toToken || !swapState.fromAmount || !quote) {
       handleError(new Error('Please fill in all required fields'));
       return;
@@ -494,7 +550,8 @@ export default function MultichainSwapInterface({
       quote &&
       !isSwapping &&
       !isLoadingQuote &&
-      areTokensValidForChain(swapState.fromToken, swapState.toToken)
+      areTokensValidForChain(swapState.fromToken, swapState.toToken) &&
+      !networkMismatch
     );
   }, [
     isConnected,
@@ -504,12 +561,14 @@ export default function MultichainSwapInterface({
     swapState.fromAmount,
     quote,
     isSwapping,
-    isLoadingQuote
+    isLoadingQuote,
+    networkMismatch
   ]);
 
   // Get swap button text
   const getSwapButtonText = (): string => {
     if (!isConnected) return 'Connect Wallet';
+    if (networkMismatch) return `Switch wallet to ${networkName(chainId)}`;
     if (!isChainSupportedForSwap) return 'Unsupported Chain';
     if (!swapState.fromToken || !swapState.toToken) return 'Select Tokens';
     if (!swapState.fromAmount || parseFloat(swapState.fromAmount) <= 0) return 'Enter Amount';
@@ -592,6 +651,26 @@ export default function MultichainSwapInterface({
               <div className="text-xs text-yellow-300 mt-1">
                 Please switch to KalyChain, BSC, or Arbitrum
               </div>
+            </div>
+          )}
+
+          {/* Wallet on the wrong network warning (mirrors the bridge page) */}
+          {networkMismatch && (
+            <div className="p-3 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Wrong network in your wallet</span>
+              </div>
+              <div className="text-xs text-yellow-300 mt-1">
+                Your wallet is on {networkName(walletRealChainId)}. Switch it to {networkName(chainId)} to complete this swap.
+              </div>
+              <Button
+                size="sm"
+                onClick={() => handleChainSwitch(chainId)}
+                className="mt-2 h-8 bg-yellow-600 hover:bg-yellow-700 text-white text-xs"
+              >
+                Switch to {networkName(chainId)}
+              </Button>
             </div>
           )}
 

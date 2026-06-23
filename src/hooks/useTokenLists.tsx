@@ -13,6 +13,8 @@ import { tokenListService } from '@/services/tokenListService';
 import { Token } from '@/config/dex/types';
 import { KALYCHAIN_TOKENS } from '@/config/dex/tokens/kalychain';
 import { KALYCHAIN_TESTNET_TOKENS } from '@/config/dex/tokens/kalychain-testnet';
+import { BSC_TOKENS } from '@/config/dex/tokens/bsc';
+import { ARBITRUM_TOKENS } from '@/config/dex/tokens/arbitrum';
 import { logger } from '@/lib/logger';
 
 // Enhanced token interface with additional metadata from subgraph
@@ -40,6 +42,16 @@ export interface UseTokenListsReturn {
 // Hook return interface - matches existing useTokens interface
 export interface UseTokenListsOptions {
   chainId?: number; // Optional chainId override for testing
+}
+
+/**
+ * Bundled per-chain token arrays used as an offline fallback when the remote
+ * official list is unreachable or returns nothing. Keeps selectors populated.
+ */
+function getBundledTokens(chainId: number): Token[] {
+  if (chainId === 56) return BSC_TOKENS.filter(t => t.chainId === 56);
+  if (chainId === 42161) return ARBITRUM_TOKENS.filter(t => t.chainId === 42161);
+  return [];
 }
 
 /**
@@ -279,22 +291,17 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
         tokenListTokens = KALYCHAIN_TESTNET_TOKENS.filter(t => t.chainId === CHAIN_IDS.KALYCHAIN_TESTNET);
         logger.debug(`Using local KalyChain Testnet token list: ${tokenListTokens.length} tokens`);
       } else {
-        // For other chains, fetch from external sources
+        // For other chains, fetch the official remote list first.
         tokenListTokens = await tokenListService.getTokensForChain(chainId);
 
-        // For BSC, ensure BUSD is included (it was deprecated but still has liquidity)
-        if (chainId === 56) {
-          const hasBUSD = tokenListTokens.some(t => t.symbol === 'BUSD');
-          if (!hasBUSD) {
-            logger.debug('BUSD not in token list, adding manually');
-            tokenListTokens.push({
-              chainId: 56,
-              address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
-              decimals: 18,
-              name: 'BUSD Token',
-              symbol: 'BUSD',
-              logoURI: '/tokens/busd.png'
-            });
+        // If the remote list is unreachable/empty (e.g. backend down),
+        // fall back to the bundled curated array so the selector is
+        // never silently empty.
+        if (!tokenListTokens || tokenListTokens.length === 0) {
+          const bundled = getBundledTokens(chainId);
+          if (bundled.length > 0) {
+            logger.warn(`Remote token list empty for chain ${chainId}; using ${bundled.length} bundled fallback tokens`);
+            tokenListTokens = bundled;
           }
         }
       }
@@ -322,7 +329,8 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
           fallbackTokens = KALYCHAIN_TOKENS.filter(t => t.chainId === CHAIN_IDS.KALYCHAIN);
           logger.warn(`Using local KalyChain tokens as fallback: ${fallbackTokens.length} tokens`);
         } else {
-          fallbackTokens = await tokenListService.getTokensForChain(chainId);
+          fallbackTokens = getBundledTokens(chainId);
+          logger.warn(`Using ${fallbackTokens.length} bundled fallback tokens for chain ${chainId}`);
         }
 
         const enhancedFallbackTokens = fallbackTokens.map(token => ({

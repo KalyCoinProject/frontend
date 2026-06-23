@@ -82,15 +82,6 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       logoURI: '/tokens/wbtc.png',
       standard: 'EvmHypSynthetic',
     },
-    {
-      address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-      symbol: 'CLISHA',
-      name: 'Clisha Coin',
-      decimals: 18,
-      chainId: CHAIN_IDS.KALYCHAIN,
-      logoURI: '/icons/clisha.png',
-      standard: 'EvmHypSynthetic',
-    },
   ],
   arbitrum: [
     {
@@ -160,17 +151,6 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       decimals: 18,
       chainId: 137,
       logoURI: '/logos/pol.svg',
-      standard: 'EvmHypNative',
-    },
-  ],
-  clisha: [
-    {
-      address: '0x8d0e034611B691683377d2fC9958122a30F7DAab',
-      symbol: 'CLISHA',
-      name: 'Clisha Coin',
-      decimals: 18,
-      chainId: 3890,
-      logoURI: '/logos/clisha.svg',
       standard: 'EvmHypNative',
     },
   ],

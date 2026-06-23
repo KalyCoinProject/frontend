@@ -32,7 +32,7 @@ export const bridgeConfig: BridgeConfig = Object.freeze({
   showTipBox: true,
   version,
   walletConnectProjectId,
-  supportedChains: ['kalychain', 'arbitrum', 'bsc', 'clisha'],
+  supportedChains: ['kalychain', 'arbitrum', 'bsc'],
   defaultOriginChain: 'arbitrum',
   defaultDestinationChain: 'kalychain',
 });

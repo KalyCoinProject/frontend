@@ -9,23 +9,27 @@ import { Wallet } from 'lucide-react'
 import { thirdwebClient, allWallets, twKalychain, thirdwebChains } from '@/config/thirdweb'
 import { CHAIN_IDS } from '@/config/chains'
 import { KALYCHAIN_TOKENS } from '@/config/dex/tokens/kalychain'
+import { BSC_TOKENS } from '@/config/dex/tokens/bsc'
+import { ARBITRUM_TOKENS } from '@/config/dex/tokens/arbitrum'
 
 interface ConnectWalletProps {
   children?: React.ReactNode
   className?: string
 }
 
-// Build supported tokens map for Thirdweb's wallet detail panel
-// This ensures all KalyChain ERC-20 tokens show in the "Assets" view
+// Build supported tokens map for Thirdweb's wallet detail panel "Assets" view.
+// thirdweb's supportedTokens is a static Record<chainId, Token[]>; we feed a
+// curated per-chain subset (the bundled arrays) — not the full 943-token
+// remote lists, which would bloat the panel.
+const toThirdwebTokens = (tokens: typeof KALYCHAIN_TOKENS, chainId: number) =>
+  tokens
+    .filter(t => t.chainId === chainId && !t.isNative)
+    .map(t => ({ address: t.address, name: t.name, symbol: t.symbol, icon: t.logoURI || undefined }))
+
 const supportedTokens: Record<number, Array<{ address: string; name: string; symbol: string; icon?: string }>> = {
-  [CHAIN_IDS.KALYCHAIN]: KALYCHAIN_TOKENS
-    .filter(t => t.chainId === CHAIN_IDS.KALYCHAIN && !t.isNative)
-    .map(t => ({
-      address: t.address,
-      name: t.name,
-      symbol: t.symbol,
-      icon: t.logoURI || undefined,
-    })),
+  [CHAIN_IDS.KALYCHAIN]: toThirdwebTokens(KALYCHAIN_TOKENS, CHAIN_IDS.KALYCHAIN),
+  [CHAIN_IDS.BSC]: toThirdwebTokens(BSC_TOKENS, CHAIN_IDS.BSC),
+  [CHAIN_IDS.ARBITRUM]: toThirdwebTokens(ARBITRUM_TOKENS, CHAIN_IDS.ARBITRUM),
 }
 
 // Custom theme matching KalySwap's amber/dark design

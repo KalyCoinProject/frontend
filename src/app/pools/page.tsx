@@ -139,8 +139,8 @@ export default function PoolsPage() {
                 <Button
                   variant="outline"
                   onClick={() => router.push('/pools/migrate')}
-                  className="flex items-center space-x-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-                  style={{ borderColor: 'rgba(245, 158, 11, 0.35)' }}
+                  className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50"
+                  style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
                 >
                   <ArrowUpRight className="h-4 w-4" />
                   <span>Migrate V2 → V3</span>

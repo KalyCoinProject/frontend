@@ -1,5 +1,4 @@
 import { createConfig, http, fallback } from 'wagmi'
-import { injected, walletConnect } from 'wagmi/connectors'
 import { supportedChains, getRpcUrls, RPC_URLS } from './chains'
 
 // Re-export RPC URLs for backward compatibility
@@ -30,18 +29,12 @@ const transports = supportedChains.reduce((acc, chain) => {
 // Thirdweb handles wallet connection UI and in-app wallets separately
 export const wagmiConfig = createConfig({
   chains: supportedChains,
-  connectors: [
-    injected(),
-    walletConnect({
-      projectId,
-      metadata: {
-        name: 'KalySwap V3',
-        description: 'Decentralized Exchange and Launchpad on KalyChain',
-        url: 'https://kalyswap.io',
-        icons: ['https://kalyswap.io/logo.png'],
-      },
-    }),
-  ],
+  // No static wagmi connectors. The app connects ONLY through thirdweb; the
+  // thirdweb<->wagmi bridge (src/connectors/thirdwebBridge.ts) injects its
+  // connector at runtime. Removing injected()/walletConnect() eliminates the
+  // dual-path where MetaMask auto-connected via wagmi behind thirdweb's back —
+  // the root cause of the mid-operation wallet disconnects.
+  connectors: [],
   transports,
   ssr: false,
 })

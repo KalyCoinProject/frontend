@@ -39,6 +39,8 @@ import { useTokenBalances } from '@/hooks/useTokenBalance';
 import { formatUnits } from 'viem';
 import { Token } from '@/config/dex/types';
 import { calculateBothPrices } from '@/utils/price';
+import { computeUserPositionAmounts } from '@/utils/poolShare';
+import { getContractAddress, resolveDexChainId } from '@/config/contracts';
 import { useProtocolVersion } from '@/contexts/ProtocolVersionContext';
 import { getKalySwapV3Service } from '@/services/dex/KalySwapV3Service';
 import { V3_DEFAULT_FEE_TIER, MIN_TICK, MAX_TICK, getTickSpacing } from '@/config/dex/v3-constants';
@@ -102,6 +104,10 @@ export default function LiquidityForm({
   const [pairExists, setPairExists] = useState<boolean | null>(null);
   const [marketPrice, setMarketPrice] = useState<string | null>(null);
   const [userLPBalance, setUserLPBalance] = useState<string>('0');
+  // The user's underlying token amounts for an existing V2 position (their share
+  // of the reserves). Shown instead of the raw LP-token count, which is
+  // meaningless to users and rounds to 0 for decimal-mismatched pairs.
+  const [userPositionAmounts, setUserPositionAmounts] = useState<{ tokenA: number; tokenB: number; share: number } | null>(null);
   const [pairAddress, setPairAddress] = useState<string>('');
 
   // Simple approval state management
@@ -118,20 +124,29 @@ export default function LiquidityForm({
   const token1 = isToken0A ? tokenB : tokenA;
 
   // Use refs to store callback functions to prevent dependency issues
+  const onAmountAChangeRef = useRef(onAmountAChange);
   const onAmountBChangeRef = useRef(onAmountBChange);
   const getPairInfoRef = useRef(getPairInfo);
   const calculateOptimalAmountsRef = useRef(calculateOptimalAmounts);
 
-  // Re-entry guard for the amountB calculation effect. Using a ref (not the
+  // Re-entry guard for the amount calculation effects. Using a ref (not the
   // isCalculating state) keeps the effect from self-retriggering via its own
   // dep array every time setIsCalculating flips.
   const isCalculatingRef = useRef(false);
-  // Track which amountA we've already computed amountB for, so the effect
-  // doesn't re-run for the same input when unrelated deps change.
+  // Track which amount we've already computed the paired amount for, so the
+  // effects don't re-run for the same input when unrelated deps change.
   const lastComputedForAmountA = useRef<string | null>(null);
+  const lastComputedForAmountB = useRef<string | null>(null);
+  // Which input the USER last edited ('A' or 'B'). Set ONLY by the input
+  // handlers — never by the programmatic onAmount*Change calls the effects make.
+  // This is what lets the two directional effects coexist: when the A→B effect
+  // fills amountB, lastEdited stays 'A', so the B→A effect knows not to fire
+  // back and recompute amountA (which would ping-pong forever).
+  const lastEditedRef = useRef<'A' | 'B' | null>(null);
 
   // Update refs when props change
   useEffect(() => {
+    onAmountAChangeRef.current = onAmountAChange;
     onAmountBChangeRef.current = onAmountBChange;
     getPairInfoRef.current = getPairInfo;
     calculateOptimalAmountsRef.current = calculateOptimalAmounts;
@@ -317,6 +332,7 @@ export default function LiquidityForm({
     const checkUserPosition = async () => {
       if (!address || (!pairAddress && !isV3) || (!pairExists && !isV3)) {
         setUserLPBalance('0');
+        setUserPositionAmounts(null);
         return;
       }
 
@@ -361,9 +377,37 @@ export default function LiquidityForm({
         setUserLPBalance(formattedBalance);
 
         poolLogger.debug(`User LP balance for ${tokenA.symbol}/${tokenB.symbol}:`, formattedBalance);
+
+        // Derive the user's underlying token amounts (their share of reserves)
+        // so the position can be shown in human terms instead of a raw LP count
+        // that rounds to 0 for decimal-mismatched pairs (e.g. USDC 6 / KUSD 18).
+        const pairInfo = await getPairInfoRef.current(tokenA.address, tokenB.address);
+        if (pairInfo && pairInfo.exists && pairInfo.totalSupply) {
+          const amounts = computeUserPositionAmounts(
+            parseFloat(formattedBalance),
+            parseFloat(pairInfo.totalSupply),
+            parseFloat(pairInfo.reserve0),
+            parseFloat(pairInfo.reserve1),
+          );
+          // Map token0/token1 (reserve order) onto the selected tokenA/tokenB,
+          // resolving native KLC to WKLC the same way getPairInfo does.
+          const NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000';
+          const wklc = getContractAddress('WKLC', resolveDexChainId(chainId)).toLowerCase();
+          const resolveAddr = (t: Token) =>
+            t.address.toLowerCase() === NATIVE_ADDRESS ? wklc : t.address.toLowerCase();
+          const tokenAIsToken0 = resolveAddr(tokenA) === (pairInfo.token0 || '').toLowerCase();
+          setUserPositionAmounts({
+            tokenA: tokenAIsToken0 ? amounts.token0Amount : amounts.token1Amount,
+            tokenB: tokenAIsToken0 ? amounts.token1Amount : amounts.token0Amount,
+            share: amounts.share,
+          });
+        } else {
+          setUserPositionAmounts(null);
+        }
       } catch (error) {
         poolLogger.error('Error fetching user LP balance:', error);
         setUserLPBalance('0');
+        setUserPositionAmounts(null);
       }
     };
 
@@ -378,6 +422,9 @@ export default function LiquidityForm({
     const calculateAmounts = async () => {
       // Only calculate for existing pools, not new pools
       if (pairExists !== true || !amountA) return;
+      // Only react to user edits of side A. If amountA changed because the B→A
+      // effect filled it, lastEdited is 'B' — skip, or the two effects ping-pong.
+      if (lastEditedRef.current === 'B') return;
       // Skip if we've already computed amountB for this exact amountA input —
       // prevents re-firing when unrelated deps (e.g. chainId unchanged but a
       // parent re-render) re-enter this effect.
@@ -434,19 +481,61 @@ export default function LiquidityForm({
     //    effect re-runs on amountA change with a fresh closure.
   }, [amountA, pairExists, tokenA.address, tokenB.address, isV3, isConnected, chainId]);
 
+  // Reverse direction: when the user edits side B, compute side A. Mirror of the
+  // effect above. V3 has no reverse-ratio helper, so V3 stays A→B only.
+  useEffect(() => {
+    const calculateAmountAFromB = async () => {
+      if (pairExists !== true || !amountB) return;
+      // Only react to user edits of side B (programmatic fills leave lastEdited
+      // as 'A', which the A→B effect owns).
+      if (lastEditedRef.current !== 'B') return;
+      if (isV3) return; // no V3 reverse calc; keep amountA under user control
+      if (lastComputedForAmountB.current === amountB) return;
+      if (isCalculatingRef.current) return;
+
+      isCalculatingRef.current = true;
+      try {
+        const optimalAmounts = await calculateOptimalAmountsRef.current(
+          tokenA.address,
+          tokenB.address,
+          amountB,
+          'B'
+        );
+
+        if (optimalAmounts && optimalAmounts.amountA !== amountA) {
+          onAmountAChangeRef.current(optimalAmounts.amountA);
+        }
+        lastComputedForAmountB.current = amountB;
+      } catch (error) {
+        poolLogger.error('Error calculating optimal amountA:', error);
+      } finally {
+        isCalculatingRef.current = false;
+      }
+    };
+
+    calculateAmountAFromB();
+    // amountA excluded for the same reason amountB is excluded from the A→B
+    // effect: this effect sets amountA, and depending on it would cascade.
+  }, [amountB, pairExists, tokenA.address, tokenB.address, isV3, isConnected, chainId]);
+
 
 
   const handleAmountAChange = (value: string) => {
     // Only allow numbers and decimal point
     if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      lastEditedRef.current = 'A';
       onAmountAChange(value);
+      // Clearing one side clears the auto-filled paired amount too.
+      if (value === '') onAmountBChange('');
     }
   };
 
   const handleAmountBChange = (value: string) => {
     // Only allow numbers and decimal point
     if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      lastEditedRef.current = 'B';
       onAmountBChange(value);
+      if (value === '') onAmountAChange('');
     }
   };
 
@@ -678,10 +767,19 @@ export default function LiquidityForm({
             <Info className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
             <div>
               <h4 className="text-sm font-medium text-blue-900 mb-1">Your Position</h4>
-              <p className="text-sm text-blue-800">
-                You have {parseFloat(userLPBalance).toFixed(6)} LP tokens in this pool.
-                You can add more liquidity to your existing position.
-              </p>
+              {userPositionAmounts ? (
+                <p className="text-sm text-blue-800">
+                  You have {userPositionAmounts.tokenA.toLocaleString(undefined, { maximumFractionDigits: 6 })} {tokenA.symbol}
+                  {' + '}
+                  {userPositionAmounts.tokenB.toLocaleString(undefined, { maximumFractionDigits: 6 })} {tokenB.symbol}
+                  {' '}in this pool ({(userPositionAmounts.share * 100).toFixed(2)}% of the pool).
+                  You can add more liquidity to your existing position.
+                </p>
+              ) : (
+                <p className="text-sm text-blue-800">
+                  You have an existing position in this pool. You can add more liquidity to it.
+                </p>
+              )}
             </div>
           </div>
         </div>

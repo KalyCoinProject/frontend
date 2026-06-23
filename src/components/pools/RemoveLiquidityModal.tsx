@@ -11,6 +11,7 @@ import { ArrowDown, Plus, X } from 'lucide-react';
 import { PoolData } from '@/hooks/usePoolDiscovery';
 import { usePools } from '@/hooks/usePools';
 import { useWallet } from '@/hooks/useWallet';
+import { lpAmountForPercentage } from '@/utils/poolShare';
 import { useWalletClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 
@@ -86,16 +87,19 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
       };
     }
 
-    // LP amount: use BigInt math against the raw balance to avoid Float64 precision loss.
-    // parseFloat on an 18-decimal LP balance can round upward (e.g. "49.999999999999999"
-    // → 50), which makes us try to transferFrom more LP than the user owns and the
-    // pair's SafeMath underflows with ds-math-sub-underflow.
+    // LP amount via BigInt math (never Float64). Prefer the raw on-chain balance:
+    // parseFloat on an 18-decimal LP balance can round upward (e.g.
+    // "49.999999999999999" → 50), making us transferFrom more LP than the user
+    // owns so the pair's SafeMath underflows (ds-math-sub-underflow). When the
+    // raw balance isn't available, fall back to lpAmountForPercentage, which is
+    // also BigInt-based and — unlike parseFloat().toString() — avoids the
+    // scientific notation that parseUnits rejects for microscopic LP balances.
     let lpAmount: string;
     if (pool.userLpBalanceRaw !== undefined) {
       const liquidityWei = (pool.userLpBalanceRaw * BigInt(percentage)) / 100n;
       lpAmount = formatUnits(liquidityWei, 18);
     } else {
-      lpAmount = (parseFloat(pool.userLpBalance) * percentage / 100).toString();
+      lpAmount = lpAmountForPercentage(pool.userLpBalance, percentage);
     }
     const token0Amount = (parseFloat(pool.userToken0Amount) * percentage / 100).toString();
     const token1Amount = (parseFloat(pool.userToken1Amount) * percentage / 100).toString();

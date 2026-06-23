@@ -54,17 +54,11 @@ export const twBsc = defineChain({
   rpc: RPC_URLS[CHAIN_IDS.BSC],
 })
 
-export const twClisha = defineChain({
-  id: CHAIN_IDS.CLISHA,
-  rpc: RPC_URLS[CHAIN_IDS.CLISHA],
-})
-
 export const thirdwebChains = [
   twKalychain,
   twKalychainTestnet,
   twArbitrum,
   twBsc,
-  twClisha,
 ]
 
 // ============================================================================

@@ -85,8 +85,11 @@ export default function MigrateWithFallback() {
             'Your V2 liquidity is now a V3 position. Redirecting to your V3 positions…',
         );
         // Switch the pools view to V3 so the user lands on the page showing
-        // their newly-minted V3 NFT position, not the V2 list.
-        setProtocolVersion('v3');
+        // their newly-minted V3 NFT position, not the V2 list. This is a
+        // transient, in-memory switch only — do NOT persist it, or every
+        // future visit would default to V3 and silently steer the user's V2
+        // add/remove-liquidity actions into V3 (hiding their V2 positions).
+        setProtocolVersion('v3', { persist: false });
         setSelectedPosition(null);
         // Brief pause so the toast is visible before we navigate.
         setTimeout(() => router.push('/pools/browse'), 900);

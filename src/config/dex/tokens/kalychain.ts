@@ -89,15 +89,6 @@ export const KALYCHAIN_TOKENS: Token[] = [
     symbol: 'POL',
     logoURI: '/tokens/pol.png'
   },
-  // Clisha token (bridge token)
-  {
-    chainId: CHAIN_IDS.KALYCHAIN,
-    address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
-    decimals: 18,
-    name: 'Clisha Coin',
-    symbol: 'CLISHA',
-    logoURI: '/tokens/clisha.png'
-  },
   // KNetwork token
   {
     chainId: CHAIN_IDS.KALYCHAIN,

@@ -264,8 +264,7 @@ export function useTokenPrice(symbol: string) {
           'wKLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3',
           'USDT': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
           'KSWAP': '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
-          'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6',
-          'CLISHA': '0x376e0ac0b55aa79f9b30aac8842e5e84ff06360c'
+          'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6'
         };
 
         const tokenAddress = tokenAddressMap[symbol];
@@ -940,9 +939,12 @@ export function useDexMarketStats(): DexMarketStats {
   // Create provider instance
   const getProvider = useCallback(() => {
     try {
-      // Try to use window.ethereum first (if available), then fallback to RPC
-      if (typeof window !== 'undefined' && window.ethereum) {
-        return new ethers.providers.Web3Provider(window.ethereum);
+      // Try to use the injected provider first (if available), then fallback to RPC
+      const injectedProvider = typeof window !== 'undefined'
+        ? (window as unknown as { ethereum?: any }).ethereum
+        : undefined;
+      if (injectedProvider) {
+        return new ethers.providers.Web3Provider(injectedProvider);
       }
 
       // Fallback to JsonRpcProvider with proper configuration for ethers v5

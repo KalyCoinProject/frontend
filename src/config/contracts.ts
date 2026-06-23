@@ -202,6 +202,26 @@ export function getContractAddress(contractName: keyof typeof MAINNET_CONTRACTS,
   return contracts[contractName as keyof typeof contracts];
 }
 
+/**
+ * The KalySwap V2 DEX (router/factory/WKLC) is only deployed on KalyChain
+ * mainnet and testnet. Liquidity hooks must know whether the wallet's
+ * connected chain is one we have contracts for.
+ */
+export function isSupportedDexChain(chainId: number | undefined): boolean {
+  return chainId === CHAIN_ID.KALYCHAIN_MAINNET || chainId === CHAIN_ID.KALYCHAIN_TESTNET;
+}
+
+/**
+ * Resolve the chain ID to use for V2 DEX contract lookups. Uses the wallet's
+ * connected chain when it is a supported KalyChain network (so testnet uses
+ * testnet addresses, not mainnet), and falls back to DEFAULT_CHAIN_ID for
+ * unsupported/unknown chains so read-only discovery still resolves an address
+ * instead of throwing. Writes are separately guarded against unsupported chains.
+ */
+export function resolveDexChainId(chainId: number | undefined): number {
+  return isSupportedDexChain(chainId) ? (chainId as number) : DEFAULT_CHAIN_ID;
+}
+
 // Helper function to check if address is native token
 export function isNativeToken(address: string): boolean {
   return address === '0x0000000000000000000000000000000000000000' || address.toLowerCase() === 'native';
