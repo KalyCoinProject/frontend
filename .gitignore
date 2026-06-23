@@ -44,3 +44,6 @@ coverage/
 # Misc
 .DS_Store
 Thumbs.db
+
+# TypeScript incremental build cache (should not be tracked)
+tsconfig.tsbuildinfo
