@@ -16,7 +16,7 @@ export type ProtocolVersion = 'v2' | 'v3';
 // Context type
 interface ProtocolVersionContextType {
     protocolVersion: ProtocolVersion;
-    setProtocolVersion: (version: ProtocolVersion) => void;
+    setProtocolVersion: (version: ProtocolVersion, options?: { persist?: boolean }) => void;
     toggleVersion: () => void;
     isV3: boolean;
     isV2: boolean;
@@ -72,8 +72,13 @@ export function ProtocolVersionProvider({ children }: { children: React.ReactNod
         }
     }, [isV3Supported]);
 
-    // Save preference to localStorage when it changes
-    const setProtocolVersion = useCallback((version: ProtocolVersion) => {
+    // Save preference to localStorage when it changes.
+    // `options.persist` defaults to true so explicit user toggles survive
+    // reloads. Pass { persist: false } for transient switches (e.g. the migrate
+    // flow briefly forcing V3 to land on the new position) — those must NOT
+    // overwrite the saved preference, otherwise the user is silently locked
+    // into V3 and their V2 add/remove-liquidity actions get steered to V3.
+    const setProtocolVersion = useCallback((version: ProtocolVersion, options?: { persist?: boolean }) => {
         // Prevent switching to V3 if not supported
         if (version === 'v3' && !isV3Supported) {
             console.warn('V3 is not supported on this chain');
@@ -81,6 +86,11 @@ export function ProtocolVersionProvider({ children }: { children: React.ReactNod
         }
 
         setProtocolVersionState(version);
+
+        if (options?.persist === false) {
+            return;
+        }
+
         try {
             localStorage.setItem(STORAGE_KEY, version);
         } catch (error) {

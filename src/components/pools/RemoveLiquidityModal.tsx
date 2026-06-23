@@ -11,6 +11,7 @@ import { ArrowDown, Plus, X } from 'lucide-react';
 import { PoolData } from '@/hooks/usePoolDiscovery';
 import { usePools } from '@/hooks/usePools';
 import { useWallet } from '@/hooks/useWallet';
+import { lpAmountForPercentage } from '@/utils/poolShare';
 import { formatUnits, parseUnits } from 'viem';
 
 interface TokenIconProps {
@@ -81,7 +82,10 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
       };
     }
 
-    const lpAmount = (parseFloat(pool.userLpBalance) * percentage / 100).toString();
+    // Bigint-based so a microscopic LP balance doesn't render as scientific
+    // notation (which parseUnits rejects); exact at 100% so MAX clears the
+    // whole position. See lpAmountForPercentage.
+    const lpAmount = lpAmountForPercentage(pool.userLpBalance, percentage);
     const token0Amount = (parseFloat(pool.userToken0Amount) * percentage / 100).toString();
     const token1Amount = (parseFloat(pool.userToken1Amount) * percentage / 100).toString();
 

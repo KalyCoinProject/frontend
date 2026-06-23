@@ -939,9 +939,12 @@ export function useDexMarketStats(): DexMarketStats {
   // Create provider instance
   const getProvider = useCallback(() => {
     try {
-      // Try to use window.ethereum first (if available), then fallback to RPC
-      if (typeof window !== 'undefined' && window.ethereum) {
-        return new ethers.providers.Web3Provider(window.ethereum);
+      // Try to use the injected provider first (if available), then fallback to RPC
+      const injectedProvider = typeof window !== 'undefined'
+        ? (window as unknown as { ethereum?: any }).ethereum
+        : undefined;
+      if (injectedProvider) {
+        return new ethers.providers.Web3Provider(injectedProvider);
       }
 
       // Fallback to JsonRpcProvider with proper configuration for ethers v5

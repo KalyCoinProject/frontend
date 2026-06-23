@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { parseUnits, formatUnits, getContract } from 'viem';
-import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { getContractAddress, DEFAULT_CHAIN_ID, isSupportedDexChain, resolveDexChainId } from '@/config/contracts';
 import { ROUTER_ABI, FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
 import { DexService, Token as DexToken } from '@/services/dex';
 import { poolLogger } from '@/lib/logger';
@@ -47,9 +47,28 @@ export function usePools() {
   const [approvalStates, setApprovalStates] = useState<{ [key: string]: ApprovalState }>({});
 
   // Wagmi hooks for wallet interaction
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+
+  // The V2 DEX only exists on KalyChain mainnet/testnet. Resolve all contract
+  // lookups against the wallet's connected chain (so testnet uses testnet
+  // addresses) and fall back to the default for unknown chains. Previously every
+  // lookup hardcoded DEFAULT_CHAIN_ID (mainnet), which silently used mainnet
+  // addresses on testnet and produced opaque reverts when the wallet was on an
+  // unsupported chain (BSC/Arbitrum).
+  const effectiveChainId = useMemo(() => resolveDexChainId(chainId), [chainId]);
+
+  // Guard for write paths: refuse to build a transaction against the wrong
+  // network instead of submitting a doomed call to a KalyChain address on
+  // another chain. Returns a clear error message, or null if the chain is fine.
+  const unsupportedChainError = useMemo(
+    () =>
+      chainId !== undefined && !isSupportedDexChain(chainId)
+        ? 'Please switch your wallet to KalyChain to manage liquidity.'
+        : null,
+    [chainId],
+  );
 
   // Helper function to execute contract calls via standard Wagmi writeContract
   const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi = ROUTER_ABI) => {
@@ -84,7 +103,11 @@ export function usePools() {
     tokenAddress: string,
     routerAddress?: string
   ): Promise<void> => {
-    const spenderAddress = routerAddress || getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
+    if (unsupportedChainError) {
+      throw new Error(unsupportedChainError);
+    }
+
+    const spenderAddress = routerAddress || getContractAddress('ROUTER', effectiveChainId);
 
     if (!address) {
       throw new Error('Wallet not connected');
@@ -138,7 +161,7 @@ export function usePools() {
       poolLogger.error('Error approving token:', err);
       throw err;
     }
-  }, [executeContractCall, publicClient, address, walletClient]);
+  }, [executeContractCall, publicClient, address, walletClient, effectiveChainId, unsupportedChainError]);
 
   // New function to get pair info from subgraph
   const getPairInfoFromSubgraph = useCallback(async (tokenA: string, tokenB: string): Promise<PairInfo | null> => {
@@ -244,7 +267,7 @@ export function usePools() {
     // otherwise the factory will always return zero and the UI will claim
     // the pool doesn't exist when it actually does (as WKLC pair).
     const NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000';
-    const wklc = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+    const wklc = getContractAddress('WKLC', effectiveChainId);
     const tokenAResolved = tokenA.toLowerCase() === NATIVE_ADDRESS ? wklc : tokenA;
     const tokenBResolved = tokenB.toLowerCase() === NATIVE_ADDRESS ? wklc : tokenB;
 
@@ -260,7 +283,7 @@ export function usePools() {
     if (!publicClient) return null;
 
     try {
-      const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
+      const factoryAddress = getContractAddress('FACTORY', effectiveChainId);
       const factoryContract = getContract({
         address: factoryAddress as `0x${string}`,
         abi: FACTORY_ABI,
@@ -339,7 +362,7 @@ export function usePools() {
       poolLogger.error('Error fetching pair info:', err);
       return null;
     }
-  }, [publicClient, getPairInfoFromSubgraph]);
+  }, [publicClient, getPairInfoFromSubgraph, effectiveChainId]);
 
   const calculateOptimalAmounts = useCallback(async (
     tokenA: string,
@@ -413,12 +436,17 @@ export function usePools() {
       return false;
     }
 
+    if (unsupportedChainError) {
+      setError(unsupportedChainError);
+      return false;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-      const wklcAddress = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+      const routerAddress = getContractAddress('ROUTER', effectiveChainId);
+      const wklcAddress = getContractAddress('WKLC', effectiveChainId);
 
       // Convert amounts to proper decimals
       const amountADesired = parseUnits(amountA, tokenADecimals);
@@ -507,7 +535,7 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [publicClient, address, executeContractCall]);
+  }, [publicClient, address, executeContractCall, effectiveChainId, unsupportedChainError]);
 
   // Update the ref with the addLiquidity function
   addLiquidityRef.current = addLiquidity;
@@ -525,11 +553,16 @@ export function usePools() {
       return false;
     }
 
+    if (unsupportedChainError) {
+      setError(unsupportedChainError);
+      return false;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
+      const factoryAddress = getContractAddress('FACTORY', effectiveChainId);
 
       poolLogger.debug('Creating pair and adding liquidity:', {
         tokenA,
@@ -575,7 +608,7 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [publicClient, address, executeContractCall, getPairInfo]);
+  }, [publicClient, address, executeContractCall, getPairInfo, effectiveChainId, unsupportedChainError]);
 
   const removeLiquidity = useCallback(async (
     tokenA: string,
@@ -591,12 +624,17 @@ export function usePools() {
       return false;
     }
 
+    if (unsupportedChainError) {
+      setError(unsupportedChainError);
+      return false;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
-      const wklcAddress = getContractAddress('WKLC', DEFAULT_CHAIN_ID);
+      const routerAddress = getContractAddress('ROUTER', effectiveChainId);
+      const wklcAddress = getContractAddress('WKLC', effectiveChainId);
 
       poolLogger.debug('Removing liquidity:', {
         tokenA,
@@ -612,7 +650,7 @@ export function usePools() {
       const amountBMinBN = parseUnits(amountBMin, tokenBDecimals);
 
       // Get pair address for LP token approval
-      const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
+      const factoryAddress = getContractAddress('FACTORY', effectiveChainId);
       const pairAddress = await publicClient.readContract({
         address: factoryAddress as `0x${string}`,
         abi: FACTORY_ABI,
@@ -680,7 +718,7 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [publicClient, address, executeContractCall]);
+  }, [publicClient, address, executeContractCall, effectiveChainId, unsupportedChainError]);
 
   const getUserPools = useCallback(async (userAddress: string) => {
     try {
@@ -801,7 +839,7 @@ export function usePools() {
                       symbol: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
                       name: 'Unknown',
                       decimals: (await getContract({ address: pairInfo.token0 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
-                      chainId: DEFAULT_CHAIN_ID,
+                      chainId: effectiveChainId,
                       logoURI: '',
                     },
                     token1: {
@@ -810,7 +848,7 @@ export function usePools() {
                       symbol: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.symbol([])) as string,
                       name: 'Unknown',
                       decimals: (await getContract({ address: pairInfo.token1 as `0x${string}`, abi: ERC20_ABI, client: publicClient! }).read.decimals([])) as number,
-                      chainId: DEFAULT_CHAIN_ID,
+                      chainId: effectiveChainId,
                       logoURI: '',
                     },
                     reserve0: pairInfo.reserve0,
@@ -833,7 +871,7 @@ export function usePools() {
       poolLogger.error('Error fetching user pools:', err);
       return [];
     }
-  }, [publicClient, getPairInfo]);
+  }, [publicClient, getPairInfo, effectiveChainId]);
 
   // Get all pairs from subgraph for browsing
   const getAllPairs = useCallback(async (first: number = 25, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {
