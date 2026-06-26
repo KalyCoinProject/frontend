@@ -481,3 +481,40 @@
     caret-color: #ffffff;
   }
 }
+
+/*
+ * Thirdweb wallet modal ("View Assets", token/network lists) — force a visible
+ * scrollbar. Thirdweb wraps its scrollable lists in a Container that applies its
+ * internal `noScrollBar` style (`::-webkit-scrollbar { display:none }` +
+ * `scrollbar-width: none`), so the asset list scrolls with no visual affordance
+ * and users don't realize tokens below the fold (e.g. KUSD) exist.
+ *
+ * The modal renders into <body> (Radix Dialog portal) with the `tw-modal` class
+ * and no shadow DOM, so this global rule reaches it. Thirdweb's noScrollBar is
+ * NOT !important, so these !important overrides win regardless of cascade layers.
+ * Unlayered is fine here for that reason.
+ */
+.tw-modal,
+.tw-modal * {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(245, 158, 11, 0.55) transparent !important; /* amber thumb */
+}
+.tw-modal::-webkit-scrollbar,
+.tw-modal *::-webkit-scrollbar {
+  display: block !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+.tw-modal::-webkit-scrollbar-track,
+.tw-modal *::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.tw-modal::-webkit-scrollbar-thumb,
+.tw-modal *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-radius: 4px !important;
+}
+.tw-modal::-webkit-scrollbar-thumb:hover,
+.tw-modal *::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.7) !important; /* amber-500 on hover */
+}
