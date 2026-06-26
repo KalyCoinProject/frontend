@@ -441,3 +441,43 @@
     backdrop-filter: none !important;
   }
 }
+
+/*
+ * V3 "Manage Position" Add-liquidity inputs.
+ * Wrapped in @layer components so it sits in the SAME layer as the global
+ * `::placeholder { color:#fef3c7 !important }` amber rule — for !important
+ * declarations layered styles beat unlayered ones, so an unlayered override
+ * would lose; within the same layer the more-specific `.v3-modal-input`
+ * selector wins. (Tailwind v4 important syntax is a suffix like `text-white!`,
+ * which is why earlier utility overrides silently did nothing.)
+ */
+@layer components {
+  .v3-modal-input {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: none !important;
+  }
+  .v3-modal-input::placeholder {
+    color: #6b7280 !important; /* gray-500 */
+    /* -webkit-text-fill-color on the input leaks into the placeholder pseudo and
+       would paint it white; pin it back to gray so the placeholder stays gray. */
+    -webkit-text-fill-color: #6b7280 !important;
+    opacity: 1;
+  }
+  .v3-modal-input:focus,
+  .v3-modal-input:focus-visible {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+    border-color: rgba(245, 158, 11, 0.5) !important; /* amber-500/50 */
+    outline: none !important;
+  }
+  /* Kill the browser autofill white/yellow wash that can make the field look white */
+  .v3-modal-input:-webkit-autofill,
+  .v3-modal-input:-webkit-autofill:hover,
+  .v3-modal-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #ffffff !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(20, 17, 6, 1) inset !important;
+    caret-color: #ffffff;
+  }
+}

@@ -585,6 +585,26 @@ export abstract class BaseV3Service implements IV3DexService {
         }
     }
 
+    // Read an ERC20 token's decimals on-chain
+    async getTokenDecimals(tokenAddress: string, publicClient: PublicClient): Promise<number> {
+        const ERC20_DECIMALS_ABI = [{
+            inputs: [],
+            name: 'decimals',
+            outputs: [{ name: '', type: 'uint8' }],
+            stateMutability: 'view',
+            type: 'function',
+        }] as const;
+
+        const decimals = await publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: ERC20_DECIMALS_ABI,
+            functionName: 'decimals',
+            args: [],
+        }) as number;
+
+        return Number(decimals);
+    }
+
     // Increase liquidity
     async increaseLiquidity(
         params: V3IncreaseLiquidityParams,
@@ -594,11 +614,17 @@ export abstract class BaseV3Service implements IV3DexService {
         const positionManagerAddress = this.getPositionManagerAddress();
         const deadline = BigInt(Math.floor(Date.now() / 1000) + params.deadline * 60);
 
-        // Get position to get token decimals
+        // Get position so we can resolve the real token0/token1 decimals.
+        // The position struct already returns token0/token1 in sorted order,
+        // matching the amount0/amount1 ordering expected by increaseLiquidity.
         const position = await this.getV3Position(params.tokenId, publicClient);
         if (!position) throw new Error('Position not found');
 
-        // Note: In a real implementation, we'd get token info for proper decimal handling
+        const [decimals0, decimals1] = await Promise.all([
+            this.getTokenDecimals(position.token0, publicClient),
+            this.getTokenDecimals(position.token1, publicClient),
+        ]);
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic ABI from config
         const txHash = await walletClient.writeContract({
             address: positionManagerAddress as `0x${string}`,
@@ -606,10 +632,10 @@ export abstract class BaseV3Service implements IV3DexService {
             functionName: 'increaseLiquidity',
             args: [{
                 tokenId: params.tokenId,
-                amount0Desired: parseUnits(params.amount0Desired, 18), // Simplified
-                amount1Desired: parseUnits(params.amount1Desired, 18),
-                amount0Min: parseUnits(params.amount0Min, 18),
-                amount1Min: parseUnits(params.amount1Min, 18),
+                amount0Desired: parseUnits(params.amount0Desired, decimals0),
+                amount1Desired: parseUnits(params.amount1Desired, decimals1),
+                amount0Min: parseUnits(params.amount0Min, decimals0),
+                amount1Min: parseUnits(params.amount1Min, decimals1),
                 deadline,
             }],
             gas: 3000000n,

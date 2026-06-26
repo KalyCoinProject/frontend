@@ -153,11 +153,33 @@ export type ChainId = SupportedChain['id']
 // ============================================================================
 // RPC URLS - With environment variable overrides for paid/unlimited nodes
 // ============================================================================
+
+/**
+ * thirdweb RPC Edge URL for a given chain. thirdweb is our paid app-wide RPC
+ * provider for external chains (Arbitrum, BSC). The browser-safe client ID
+ * authenticates the request (domain-allowlisted in the thirdweb dashboard).
+ *
+ * NOTE: NowNodes is intentionally NOT used anywhere in this app. The standalone
+ * Hyperlane bridge infrastructure has its own separate RPC setup.
+ */
+const THIRDWEB_CLIENT_ID = process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || '';
+function thirdwebRpc(chainId: number): string {
+  return THIRDWEB_CLIENT_ID
+    ? `https://${chainId}.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`
+    : '';
+}
+
+// Public fallbacks (used only if thirdweb is unreachable). Never NowNodes.
+const PUBLIC_RPC_FALLBACK: Record<number, string> = {
+  [CHAIN_IDS.ARBITRUM]: 'https://arb1.arbitrum.io/rpc',
+  [CHAIN_IDS.BSC]: 'https://bsc-dataseed.binance.org',
+};
+
 export const RPC_URLS: Record<number, string> = {
   [CHAIN_IDS.KALYCHAIN]: process.env.NEXT_PUBLIC_KALYCHAIN_RPC_URL || 'https://rpc.kalychain.io/rpc',
   [CHAIN_IDS.KALYCHAIN_TESTNET]: process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnetrpc.kalychain.io/rpc',
-  [CHAIN_IDS.ARBITRUM]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
-  [CHAIN_IDS.BSC]: process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
+  [CHAIN_IDS.ARBITRUM]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || thirdwebRpc(CHAIN_IDS.ARBITRUM) || PUBLIC_RPC_FALLBACK[CHAIN_IDS.ARBITRUM],
+  [CHAIN_IDS.BSC]: process.env.NEXT_PUBLIC_BSC_RPC_URL || thirdwebRpc(CHAIN_IDS.BSC) || PUBLIC_RPC_FALLBACK[CHAIN_IDS.BSC],
 };
 
 /**
@@ -165,6 +187,10 @@ export const RPC_URLS: Record<number, string> = {
  * client auto-rotates to a healthy endpoint when the primary is dropping
  * requests (common on shared public RPC during peak load). Order matters:
  * the first entry is tried first, the next only if it fails.
+ *
+ * For external chains the primary is thirdweb (paid); the public endpoint is
+ * only a last-resort fallback. `.filter(Boolean)` drops empty entries when an
+ * env value or the thirdweb client ID is absent.
  */
 export const RPC_URLS_ALL: Record<number, string[]> = {
   [CHAIN_IDS.KALYCHAIN]: [
@@ -175,11 +201,13 @@ export const RPC_URLS_ALL: Record<number, string[]> = {
     process.env.NEXT_PUBLIC_KALYCHAIN_TESTNET_RPC_URL || 'https://testnetrpc.kalychain.io/rpc',
   ],
   [CHAIN_IDS.ARBITRUM]: [
-    process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
-  ],
+    process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || thirdwebRpc(CHAIN_IDS.ARBITRUM),
+    PUBLIC_RPC_FALLBACK[CHAIN_IDS.ARBITRUM],
+  ].filter(Boolean),
   [CHAIN_IDS.BSC]: [
-    process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
-  ],
+    process.env.NEXT_PUBLIC_BSC_RPC_URL || thirdwebRpc(CHAIN_IDS.BSC),
+    PUBLIC_RPC_FALLBACK[CHAIN_IDS.BSC],
+  ].filter(Boolean),
 };
 
 // ============================================================================
