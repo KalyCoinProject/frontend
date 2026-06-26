@@ -9,9 +9,23 @@ import { formatUnits } from 'viem';
 import { useTokenLists } from '@/hooks/useTokenLists';
 import { useAccount, usePublicClient } from 'wagmi';
 import { CHAIN_IDS } from '@/config/chains';
-import { Wallet } from 'lucide-react';
+import { Wallet, Plus } from 'lucide-react';
 import V3ManageModal from './V3ManageModal';
 import { getKalySwapV3Service } from '@/services/dex/KalySwapV3Service';
+import { getPositionTokenAmounts } from '@/utils/v3-math';
+
+/**
+ * Format a raw token amount (bigint) into a compact, human-readable string.
+ * Shows up to 6 significant decimals and trims trailing zeros.
+ */
+function formatTokenAmount(amount: bigint, decimals: number): string {
+    const formatted = formatUnits(amount, decimals);
+    const num = Number(formatted);
+    if (num === 0) return '0';
+    if (num > 0 && num < 0.000001) return '<0.000001';
+    // Up to 6 decimal places, trimming trailing zeros.
+    return num.toLocaleString('en-US', { maximumFractionDigits: 6 });
+}
 
 interface TokenIconProps {
     token: {
@@ -70,7 +84,7 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
     const { tokens } = useTokenLists({ chainId: chainId || CHAIN_IDS.KALYCHAIN });
 
     const [isManageOpen, setIsManageOpen] = useState(false);
-    const [initialTab, setInitialTab] = useState<'remove' | 'collect'>('remove');
+    const [initialTab, setInitialTab] = useState<'add' | 'remove' | 'collect'>('remove');
 
     // Resolve token details
     const token0 = tokens.find(t => t.address.toLowerCase() === position.token0.toLowerCase()) || {
@@ -86,11 +100,13 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
 
     const feePercent = (position.fee / 10000).toFixed(2);
 
-    // Fetch current pool tick to determine if position is in range
+    // Fetch current pool state (tick + sqrtPriceX96) to determine range status
+    // and to convert the raw liquidity into underlying token amounts.
     const [currentTick, setCurrentTick] = useState<number | null>(null);
+    const [sqrtPriceX96, setSqrtPriceX96] = useState<bigint | null>(null);
     useEffect(() => {
         if (!publicClient || !chainId || position.liquidity === 0n) return;
-        const fetchTick = async () => {
+        const fetchPool = async () => {
             try {
                 const service = getKalySwapV3Service(chainId);
                 if (!service) return;
@@ -100,19 +116,37 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
                     position.fee,
                     publicClient
                 );
-                if (poolInfo) setCurrentTick(poolInfo.tick);
+                if (poolInfo) {
+                    setCurrentTick(poolInfo.tick);
+                    setSqrtPriceX96(poolInfo.sqrtPriceX96);
+                }
             } catch {
                 // If pool fetch fails, leave as null (unknown)
             }
         };
-        fetchTick();
+        fetchPool();
     }, [position.token0, position.token1, position.fee, chainId, publicClient, position.liquidity]);
 
     const isInRange = currentTick !== null
         ? currentTick >= position.tickLower && currentTick < position.tickUpper
         : position.liquidity > 0n; // Assume in-range if tick unknown but has liquidity
 
-    const handleOpenManage = (tab: 'remove' | 'collect') => {
+    // Convert raw liquidity into the underlying token0/token1 amounts.
+    let tokenAmounts: { amount0: bigint; amount1: bigint } | null = null;
+    if (sqrtPriceX96 !== null) {
+        try {
+            tokenAmounts = getPositionTokenAmounts(
+                position.liquidity,
+                sqrtPriceX96,
+                position.tickLower,
+                position.tickUpper
+            );
+        } catch {
+            tokenAmounts = null;
+        }
+    }
+
+    const handleOpenManage = (tab: 'add' | 'remove' | 'collect') => {
         setInitialTab(tab);
         setIsManageOpen(true);
     };
@@ -152,17 +186,38 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
 
                     {/* Position Info */}
                     <div className="pool-info-card p-3 mb-4">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                            <div className="flex items-center space-x-2 flex-shrink-0">
-                                <Wallet className="h-4 w-4 text-blue-400" />
-                                <span className="text-sm font-medium text-white">Liquidity</span>
-                            </div>
-                            <div className="text-right min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-white break-all">
-                                    {position.liquidity.toString()}
-                                </p>
-                            </div>
+                        <div className="flex items-center space-x-2 mb-3">
+                            <Wallet className="h-4 w-4 text-blue-400" />
+                            <span className="text-sm font-medium text-white">Liquidity</span>
                         </div>
+                        {tokenAmounts ? (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center space-x-2 flex-shrink-0">
+                                        <TokenIcon token={token0} size="sm" />
+                                        <span className="text-gray-300">{token0.symbol}</span>
+                                    </div>
+                                    <span className="text-white font-mono break-all text-right min-w-0">
+                                        {formatTokenAmount(tokenAmounts.amount0, token0.decimals || 18)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center space-x-2 flex-shrink-0">
+                                        <TokenIcon token={token1} size="sm" />
+                                        <span className="text-gray-300">{token1.symbol}</span>
+                                    </div>
+                                    <span className="text-white font-mono break-all text-right min-w-0">
+                                        {formatTokenAmount(tokenAmounts.amount1, token1.decimals || 18)}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-end">
+                                <span className="text-sm text-gray-400 animate-pulse">
+                                    {position.liquidity > 0n ? 'Loading amounts…' : 'No liquidity'}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Unclaimed Fees */}
@@ -189,6 +244,14 @@ export default function V3PositionCard({ position, onUpdate }: V3PositionCardPro
                     {/* Action Buttons */}
                     <div className="mt-4 pt-4 border-t border-gray-600">
                         <div className="flex space-x-2">
+                            <Button
+                                className="flex-1 bg-gray-900/30 text-green-400 hover:bg-green-900/30 border-green-500/30"
+                                size="sm"
+                                onClick={() => handleOpenManage('add')}
+                            >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add
+                            </Button>
                             <Button
                                 className="flex-1 bg-gray-900/30 text-blue-400 hover:bg-blue-900/30 border-blue-500/30"
                                 size="sm"

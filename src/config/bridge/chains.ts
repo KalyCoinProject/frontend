@@ -3,7 +3,7 @@
 
 import { ChainMap, ChainMetadata, ExplorerFamily } from '@hyperlane-xyz/sdk';
 import { ProtocolType } from '@hyperlane-xyz/utils';
-import { CHAIN_IDS } from '@/config/chains';
+import { CHAIN_IDS, getRpcUrl } from '@/config/chains';
 
 // Complete chain configurations matching production standards
 export const bridgeChains: ChainMap<ChainMetadata> = {
@@ -14,7 +14,7 @@ export const bridgeChains: ChainMap<ChainMetadata> = {
     name: 'kalychain',
     displayName: 'KalyChain',
     nativeToken: { name: 'KalyCoin', symbol: 'KLC', decimals: 18 },
-    rpcUrls: [{ http: 'https://rpc.kalychain.io/rpc' }],
+    rpcUrls: [{ http: getRpcUrl(CHAIN_IDS.KALYCHAIN) }],
     blockExplorers: [
       {
         name: 'KalyScan',
@@ -37,7 +37,7 @@ export const bridgeChains: ChainMap<ChainMetadata> = {
     name: 'arbitrum',
     displayName: 'Arbitrum One',
     nativeToken: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: [{ http: 'https://arb1.arbitrum.io/rpc' }],
+    rpcUrls: [{ http: getRpcUrl(42161) }],
     blockExplorers: [
       {
         name: 'Arbiscan',
@@ -60,7 +60,7 @@ export const bridgeChains: ChainMap<ChainMetadata> = {
     name: 'bsc',
     displayName: 'BNB Smart Chain',
     nativeToken: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-    rpcUrls: [{ http: 'https://bsc-dataseed.binance.org' }],
+    rpcUrls: [{ http: getRpcUrl(56) }],
     blockExplorers: [
       {
         name: 'BscScan',
