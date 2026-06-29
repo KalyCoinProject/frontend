@@ -32,7 +32,7 @@ export default function Footer() {
             </p>
             <div className="flex space-x-4">
               <a
-                href="https://twitter.com"
+                href="https://x.com/KalyChainEVM"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-amber-400"
@@ -42,7 +42,7 @@ export default function Footer() {
                 <Twitter size={20} />
               </a>
               <a
-                href="https://github.com"
+                href="https://github.com/kalycoinproject/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-amber-400"
@@ -52,7 +52,7 @@ export default function Footer() {
                 <Github size={20} />
               </a>
               <a
-                href="https://t.me"
+                href="https://t.me/KalyChain"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-amber-400"
@@ -128,7 +128,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li>
                 <a
-                  href="https://twitter.com"
+                  href="https://x.com/KalyChainEVM"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm transition-colors hover:text-amber-400"
@@ -139,7 +139,7 @@ export default function Footer() {
               </li>
               <li>
                 <a
-                  href="https://discord.com"
+                  href="https://discord.gg/tTe8BmcAks"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm transition-colors hover:text-amber-400"
@@ -150,7 +150,7 @@ export default function Footer() {
               </li>
               <li>
                 <a
-                  href="https://t.me"
+                  href="https://t.me/KalyChain"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm transition-colors hover:text-amber-400"
